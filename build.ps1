@@ -120,5 +120,5 @@ Write-Host "     Copy-Item '$dllPath' 'C:\startup\'" -ForegroundColor DarkGray
 Write-Host "     Copy-Item '$menFile' 'C:\startup\'" -ForegroundColor DarkGray
 Write-Host "     Copy-Item '$rtbFile' 'C:\startup\'" -ForegroundColor DarkGray
 Write-Host ""
-Write-Host "Note: The .men file uses NXOpen:: syntax — no signing required" -ForegroundColor Yellow
-Write-Host "for ribbon/menu auto-load. Ctrl+U works regardless of signing." -ForegroundColor Yellow
+Write-Host "Note: The .men file uses NXOpen:: syntax - no signing required for" -ForegroundColor Yellow
+Write-Host "ribbon/menu auto-load. Ctrl+U works regardless of signing." -ForegroundColor Yellow
