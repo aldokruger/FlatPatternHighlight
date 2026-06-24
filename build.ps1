@@ -105,7 +105,7 @@ else
 }
 
 $signedNote = ""
-if ($LASTEXITCODE -ne 0) { $signedNote = " (sem assinatura - use Ctrl+U)" }
+if ($LASTEXITCODE -ne 0) { $signedNote = " (assinatura indisponível)" }
 
 Write-Host ""
 Write-Host "=== Build Successful ===" -ForegroundColor Green
@@ -114,8 +114,11 @@ Write-Host "  Size:     $((Get-Item $dllPath).Length / 1KB -as [int]) KB"
 Write-Host ""
 Write-Host "Install options:" -ForegroundColor Cyan
 Write-Host "  1. Ctrl+U: File > Execute > NX Open > select the DLL directly"
-Write-Host "  2. Install: Copy to UGII_USER_DIR\startup\ for ribbon + menu auto-load"
+Write-Host "  2. Install: Copy to startup\ for ribbon + menu auto-load"
 Write-Host "     Copy all three files to a startup folder:"
 Write-Host "     Copy-Item '$dllPath' 'C:\startup\'" -ForegroundColor DarkGray
 Write-Host "     Copy-Item '$menFile' 'C:\startup\'" -ForegroundColor DarkGray
 Write-Host "     Copy-Item '$rtbFile' 'C:\startup\'" -ForegroundColor DarkGray
+Write-Host ""
+Write-Host "Note: The .men file uses NXOpen:: syntax — no signing required" -ForegroundColor Yellow
+Write-Host "for ribbon/menu auto-load. Ctrl+U works regardless of signing." -ForegroundColor Yellow

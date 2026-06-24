@@ -113,7 +113,7 @@ Estrutura:
 - **`BEGIN_GROUP ... END_GROUP`** — define um grupo dentro da aba
 - **`LABEL`** — rótulo do grupo
 - **`BITMAP`** — ícone do grupo (usa bitmap interno do NX)
-- **`BUTTON`** — referência ao mesmo action ID registrado no `.men` e na `Startup()`
+- **`BUTTON`** — referência ao mesmo action ID definido no `.men` (`FLAT_PATTERN_HIGHLIGHT`), que por sua vez usa `ACTIONS NXOpen::...` para chamar o método C# diretamente
 - **`RIBBON_STYLE`** — estilo de exibição no ribbon:
   - `ALWAYS_MEDIUM_IMAGE_AND_TEXT` — ícone médio + texto
   - `ALWAYS_LARGE_IMAGE` — ícone grande sem texto
@@ -126,16 +126,21 @@ A ribbon substitui o menu tradicional quando ambos estão presentes — o menu f
 O arquivo `FlatPatternHighlight.men` registra o plugin no menu do NX:
 
 ```
+VERSION 120
+EDIT UG_GATEWAY_MAIN_MENUBAR
 BEFORE UG_HELP
-  CASCADE_BUTTON "FLAT_PATTERN_MENU"
-  LABEL "Flat Pattern"
-    MENU "FLAT_PATTERN_MENU"
-      BUTTON "FLAT_PATTERN_HIGHLIGHT"
-      LABEL "Highlight Exterior Curves"
-      ACTIONS "FLAT_PATTERN_HIGHLIGHT"
-    END_OF_MENU
+CASCADE_BUTTON FLAT_PATTERN_MENU
+LABEL Flat Pattern
 END_OF_BEFORE
+
+MENU FLAT_PATTERN_MENU
+BUTTON FLAT_PATTERN_HIGHLIGHT
+LABEL Highlight Exterior Curves
+ACTIONS NXOpen::FlatPatternHighlight.HighlightFlatPattern::Main
+END_OF_MENU
 ```
+
+**`ACTIONS NXOpen::Namespace.Class::Method`** — Esta sintaxe (disponível desde NX 12) instrui o NX a chamar diretamente o método estático `Main` da classe `HighlightFlatPattern` no assembly `FlatPatternHighlight.dll`. Não requer `AddMenuAction()` nem DLL assinada — funciona inclusive com DLLs carregadas por Ctrl+U.
 
 O menu aparece como **Flat Pattern → Highlight Exterior Curves** antes do menu Help.
 
@@ -211,7 +216,9 @@ Size:     16 KB
 3. Selecione `FlatPatternHighlight.dll`
 4. Os 3 steps executam em sequência, com highlights visuais e saída no Log File
 
-### Via Menu + Ribbon (requer assinatura)
+### Via Menu + Ribbon (funciona sem assinatura)
+
+O `.men` usa a sintaxe `ACTIONS NXOpen::...` que chama o método C# diretamente, sem necessidade de `AddMenuAction()` ou DLL assinada.
 
 1. Copie os 3 arquivos para uma pasta `startup` do NX:
    ```powershell
@@ -222,7 +229,6 @@ Size:     16 KB
 2. Reinicie o NX
 3. O menu **Flat Pattern → Highlight Exterior Curves** aparece antes do Help
 4. A aba **Flat Pattern** aparece na faixa de opções (ribbon) do Modeling, com o grupo **Highlight** e o botão **Highlight Exterior Curves**
-5. A assinatura requer a licença `DotNet Author License` no servidor NX
 
 ### Para Remover Cotas PMI Geradas
 
@@ -431,4 +437,8 @@ Estas dobras têm um lado que encosta diretamente na borda do bounding box — s
 
 ## Licenciamento
 
-A assinatura do assembly (necessária para auto-load com menu) requer a licença **`DotNet Author License`** no servidor de licenças NX. Sem ela, o plugin funciona exclusivamente via **Ctrl+U** (File → Execute → NX Open).
+A assinatura do assembly (`SignDotNet.exe`) requer a licença **`DotNet Author License`** no servidor de licenças NX.
+
+**Desde NX 12**, o arquivo `.men` pode usar a sintaxe `ACTIONS NXOpen::Namespace.Class::Method`, que chama o método .NET diretamente sem necessidade de `AddMenuAction()` ou DLL assinada. Portanto o menu e a ribbon funcionam **com ou sem assinatura**.
+
+A assinatura só é necessária se o plugin precisar fazer parte do fluxo de inicialização automática do NX (ex: carregar antes de outros componentes). Para uso normal (Ctrl+U ou menu/ribbon via `startup`), a assinatura é opcional.

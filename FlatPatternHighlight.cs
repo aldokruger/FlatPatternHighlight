@@ -4,7 +4,6 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using NXOpen;
 using NXOpen.Features;
-using NXOpen.MenuBar;
 
 namespace FlatPatternHighlight
 {
@@ -996,33 +995,22 @@ namespace FlatPatternHighlight
         /// <summary>
         /// Required by NX: return the unload behaviour.
         /// Immediately = the DLL can be unloaded after the action completes.
+        ///
+        /// Note: The .men file now uses the NXOpen::ClassName.Method syntax
+        /// (ACTIONS NXOpen::FlatPatternHighlight.HighlightFlatPattern::Main),
+        /// which calls Main() directly without needing AddMenuAction() or a
+        /// signed Startup(). This works for both Ctrl+U and auto-load scenarios.
         /// </summary>
         public static int GetUnloadOption(string arg) { return (int)Session.LibraryUnloadOption.Immediately; }
 
         /// <summary>
-        /// Called by NX when the DLL is loaded (on NX startup if registered).
-        /// Registers the menu callback so clicking the menu item runs Main().
+        /// Called by NX when the DLL is loaded on startup (requires signing).
+        /// No longer registers AddMenuAction — the .men file's NXOpen:: syntax
+        /// resolves the action directly. Kept as a required NX lifecycle method.
         /// </summary>
         public static int Startup()
         {
-            try
-            {
-                theSession = Session.GetSession();
-                theUI = UI.GetUI();
-                theUI.MenuBarManager.AddMenuAction("FLAT_PATTERN_HIGHLIGHT",
-                    new MenuBarManager.ActionCallback(OnMenuCallback));
-                return 0;
-            }
-            catch { return 1; }
-        }
-
-        /// <summary>
-        /// Menu callback — delegates to the Main entry point.
-        /// </summary>
-        private static MenuBarManager.CallbackStatus OnMenuCallback(MenuButtonEvent buttonEvent)
-        {
-            Main(new string[0]);
-            return MenuBarManager.CallbackStatus.Continue;
+            return 0;
         }
     }
 }
