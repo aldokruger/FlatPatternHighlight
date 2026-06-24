@@ -8,29 +8,66 @@ using NXOpen.MenuBar;
 
 namespace FlatPatternHighlight
 {
+    /// <summary>
+    /// NXOpen plugin (C# .NET) for analyzing Sheet Metal flat patterns in NX 2512.
+    ///
+    /// The plugin runs in 3 sequential steps that build on each other:
+    ///   1. Outer Perimeter Filtering — reduces the raw exterior curves (incl. notch/cutout
+    ///      boundaries) to only the true external boundary edges via UF_MODL_ask_face_loops
+    ///      (P/Invoke) or a purely geometric fallback.
+    ///   2. Bend Center Lines — enumerates and highlights bend-up/bend-down center lines.
+    ///   3. Bend-to-Perimeter Proximity — for each bend, finds the nearest parallel perimeter
+    ///      curve on each side, measures distance to the bounding box, and optionally creates
+    ///      chain PMI dimensions.
+    /// </summary>
     public class HighlightFlatPattern
     {
+        // =====================================================================
+        // P/Invoke: native UF_MODL functions required because the managed NXOpen
+        // API does not expose loop-level topology (outer vs inner loops). We call
+        // into libufun.dll to ask each planar face for its loops, then filter
+        // for outer loops (type == 1).
+        // =====================================================================
+
+        /// <summary>Get the list of loops on a face (each loop = a closed chain of edges).</summary>
         [DllImport("libufun.dll", CallingConvention = CallingConvention.Cdecl)]
         static extern int UF_MODL_ask_face_loops(Tag face, out IntPtr loopList);
 
+        /// <summary>Count how many loops are in the loop list.</summary>
         [DllImport("libufun.dll", CallingConvention = CallingConvention.Cdecl)]
         static extern int UF_MODL_ask_loop_list_count(IntPtr loopList, out int count);
 
+        /// <summary>
+        /// Retrieve a specific loop from the list.
+        /// Loop type: 1 = outer loop, 2 = inner loop (hole/cutout).
+        /// edgeList is a list of edge tags belonging to that loop.
+        /// </summary>
         [DllImport("libufun.dll", CallingConvention = CallingConvention.Cdecl)]
         static extern int UF_MODL_ask_loop_list_item(IntPtr loopList, int index, out int type, out IntPtr edgeList);
 
+        /// <summary>Count items in a generic UF object list.</summary>
         [DllImport("libufun.dll", CallingConvention = CallingConvention.Cdecl)]
         static extern int UF_MODL_ask_list_count(IntPtr list, out int count);
 
+        /// <summary>Get the tag of an item by index from a generic UF object list.</summary>
         [DllImport("libufun.dll", CallingConvention = CallingConvention.Cdecl)]
         static extern int UF_MODL_ask_list_item(IntPtr list, int index, out Tag tag);
 
+        /// <summary>Free the memory allocated by UF_MODL_ask_face_loops.</summary>
         [DllImport("libufun.dll", CallingConvention = CallingConvention.Cdecl)]
         static extern int UF_MODL_delete_loop_list(ref IntPtr loopList);
 
         private static Session theSession;
         private static UI theUI;
 
+        // =====================================================================
+        // ENTRY POINT — Ctrl+U execution
+        // =====================================================================
+
+        /// <summary>
+        /// Main entry — called when the user runs the DLL via File → Execute → NX Open
+        /// (Ctrl+U), or from the menu callback.
+        /// </summary>
         public static void Main(string[] args)
         {
             try
@@ -38,6 +75,7 @@ namespace FlatPatternHighlight
                 theSession = Session.GetSession();
                 theUI = UI.GetUI();
 
+                // Require an active work part (not just a displayed part).
                 Part workPart = theSession.Parts.Work;
                 if (workPart == null)
                 {
@@ -48,6 +86,7 @@ namespace FlatPatternHighlight
                     return;
                 }
 
+                // Locate the FlatPattern feature — without it there is nothing to analyse.
                 FlatPattern flatPattern = FindFlatPattern(workPart);
                 if (flatPattern == null)
                 {
@@ -60,6 +99,7 @@ namespace FlatPatternHighlight
                     return;
                 }
 
+                // Write everything to the NX LogFile (available from Help → Log File).
                 LogFile lw = theSession.LogFile;
                 lw.WriteLine("=== FlatPatternHighlight Diagnostic Log ===");
                 lw.WriteLine($"Part: {workPart.Name}");
@@ -68,10 +108,14 @@ namespace FlatPatternHighlight
                 List<Curve> outerPerim = null;
                 List<Curve> bendLines = null;
 
+                // Step 1 — identify the true outer boundary.
                 HighlightOuterPerimeter(flatPattern, workPart, lw, out outerPerim);
+
+                // Step 2 — collect and highlight bend center lines.
                 if (outerPerim != null && outerPerim.Count > 0)
                     HighlightBendCenterLines(flatPattern, lw, outerPerim, out bendLines);
 
+                // Step 3 — analyse each bend line's proximity to the outer perimeter.
                 if (bendLines != null && bendLines.Count > 0 && outerPerim != null && outerPerim.Count > 0)
                     AnalyzeBendToPerimeter(bendLines, outerPerim, lw, workPart);
 
@@ -95,14 +139,28 @@ namespace FlatPatternHighlight
             }
         }
 
-        // ──────────────────────────────────────────────────
-        // STEP 1: Outer Perimeter
-        // ──────────────────────────────────────────────────
+        // =====================================================================
+        // STEP 1 — Outer Perimeter Identification
+        // =====================================================================
+
+        /// <summary>
+        /// Step 1: Filter the raw exterior curves from GetExteriorCurves() to obtain
+        /// only the true outer boundary, excluding internal notch/cutout loops.
+        ///
+        /// Approach:
+        ///   a) Find the flat solid body via 3 strategies (see FindFlatSolidBody).
+        ///   b) If found, call UF_MODL_ask_face_loops on each planar face and collect
+        ///      tags of edges belonging to outer loops (type == 1).
+        ///   c) Cross-reference those tags with the FlatSolidObject.Tag of each
+        ///      exterior curve.
+        ///   d) If no body is found, ALL exterior curves are returned (fallback).
+        /// </summary>
         private static void HighlightOuterPerimeter(FlatPattern flatPattern, Part workPart, LogFile lw, out List<Curve> outerPerim)
         {
             outerPerim = null;
             lw.WriteLine("--- Outer Perimeter (True External Boundary) ---");
 
+            // Fetch ALL exterior curves — includes outer boundary + every notch/cutout edge.
             FlatPattern.ObjectDataEdge[] exteriorCurves;
             flatPattern.GetExteriorCurves(out exteriorCurves);
 
@@ -115,10 +173,13 @@ namespace FlatPatternHighlight
             lw.WriteLine($"  Total exterior curves (raw): {exteriorCurves.Length}");
             lw.WriteLine("");
 
+            // Try to locate the flat solid body to distinguish outer loops from inner ones.
             Body flatBody = FindFlatSolidBody(workPart, flatPattern, lw);
             if (flatBody == null)
             {
-                lw.WriteLine("  ERROR: Could not locate flat solid body.");
+                // Fallback: use ALL exterior curves (no filtering possible).
+                // This happens on parts where the flat solid is internal or non-queryable.
+                lw.WriteLine("  ERROR: Could not locate flat solid body — using all exterior curves as perimeter.");
                 var allDisp = new List<DisplayableObject>();
                 outerPerim = new List<Curve>();
                 foreach (var ed in exteriorCurves)
@@ -133,6 +194,7 @@ namespace FlatPatternHighlight
                 return;
             }
 
+            // Collect tags from outer loops of all planar faces.
             var outerEdgeTags = new HashSet<Tag>();
 
             Face[] faces = flatBody.GetFaces();
@@ -140,6 +202,7 @@ namespace FlatPatternHighlight
 
             foreach (var face in faces)
             {
+                // Only planar faces carry the 2D flat geometry — cylindrical (bend) faces do not.
                 if (face.SolidFaceType != Face.FaceType.Planar) continue;
 
                 IntPtr loopList = IntPtr.Zero;
@@ -157,7 +220,7 @@ namespace FlatPatternHighlight
                     int loopType;
                     IntPtr edgeList;
                     UF_MODL_ask_loop_list_item(loopList, li, out loopType, out edgeList);
-                    if (loopType != 1) continue;
+                    if (loopType != 1) continue; // Skip inner loops (type 2).
 
                     int edgeCount;
                     UF_MODL_ask_list_count(edgeList, out edgeCount);
@@ -172,6 +235,8 @@ namespace FlatPatternHighlight
 
             lw.WriteLine($"  Outer loop edge tags: {outerEdgeTags.Count}");
 
+            // Keep only those exterior curves whose corresponding solid edge tag
+            // is in the set of outer-loop edge tags.
             outerPerim = new List<Curve>();
             foreach (var ed in exteriorCurves)
             {
@@ -190,14 +255,26 @@ namespace FlatPatternHighlight
             HighlightObjects(displayList);
         }
 
-        // ──────────────────────────────────────────────────
-        // STEP 2: Bend Center Lines
-        // ──────────────────────────────────────────────────
+        // =====================================================================
+        // STEP 2 — Bend Center Lines
+        // =====================================================================
+
+        /// <summary>
+        /// Step 2: Retrieve and highlight bend center lines (both up and down faces).
+        /// These are the axial lines at the centres of cylindrical bend regions.
+        ///
+        /// Bend Up   = the bend centre line when the flange folds upward.
+        /// Bend Down = the bend centre line when the flange folds downward.
+        ///
+        /// In many flat patterns, "down" bends appear on the opposite side of the
+        /// material and their center lines are offset accordingly.
+        /// </summary>
         private static void HighlightBendCenterLines(FlatPattern flatPattern, LogFile lw, List<Curve> outerPerim, out List<Curve> bendLines)
         {
             bendLines = new List<Curve>();
             lw.WriteLine("--- Bend Center Lines ---");
 
+            // Bend Up lines.
             int upCount = 0;
             FlatPattern.ObjectDataFace[] bendUp;
             flatPattern.GetBendUpCenterLines(out bendUp);
@@ -213,6 +290,7 @@ namespace FlatPatternHighlight
                 }
             }
 
+            // Bend Down lines.
             int downCount = 0;
             FlatPattern.ObjectDataFace[] bendDown;
             flatPattern.GetBendDownCenterLines(out bendDown);
@@ -243,18 +321,24 @@ namespace FlatPatternHighlight
             HighlightObjects(displayList);
         }
 
-        // ──────────────────────────────────────────────────
-        // STEP 3: Bend Line → Nearest Perimeter Analysis
-        // ──────────────────────────────────────────────────
+        // =====================================================================
+        // STEP 3 — Bend-to-Perimeter Proximity Analysis
+        // =====================================================================
+
+        /// <summary>Helper: extract a coordinate from a Point3d by axis index (0=X,1=Y,2=Z).</summary>
         private static double AxisCoord(Point3d p, int axis)
         {
             switch (axis) { case 0: return p.X; case 1: return p.Y; default: return p.Z; }
         }
 
-        // Flat pattern curves don't always lie in the Z=const (XY) plane — some parts are
-        // modeled with the flat pattern in the XZ or YZ plane. Detect which axis has the
-        // smallest spread across all curve endpoints; that's the plane's normal, and the
-        // other two axes are the ones that actually carry the 2D geometry.
+        /// <summary>
+        /// Detect the normal axis of the flat pattern plane by measuring the spread
+        /// of all curve endpoints. The axis with the smallest range is the plane normal.
+        ///
+        /// Some NX parts model the flat pattern in the XZ or YZ plane rather than the
+        /// conventional XY plane. This method makes the axis detection automatic.
+        /// </summary>
+        /// <returns>0 for X-normal, 1 for Y-normal, 2 for Z-normal.</returns>
         private static int DetectNormalAxis(List<Curve> bendLines, List<Curve> outerPerim)
         {
             double minX = double.MaxValue, minY = double.MaxValue, minZ = double.MaxValue;
@@ -276,12 +360,22 @@ namespace FlatPatternHighlight
             return 2;
         }
 
+        /// <summary>
+        /// Step 3: For each bend centre line, find the nearest parallel perimeter curve
+        /// on each side (normal direction and opposite). Compare those distances against
+        /// the distance to the overall bounding box edge to determine whether the nearest
+        /// perimeter curve IS the part's outer boundary or an intermediate feature.
+        ///
+        /// Logs a comprehensive table and optionally creates chain PMI dimensions
+        /// (see CreateChainDimensions).
+        /// </summary>
         private static void AnalyzeBendToPerimeter(List<Curve> bendLines, List<Curve> outerPerim, LogFile lw, Part workPart)
         {
             int pmiCount = 0;
 
             lw.WriteLine("--- Bend Line → Nearest Perimeter (Parallel) ---");
 
+            // Determine the flat pattern plane orientation.
             int normalAxis = DetectNormalAxis(bendLines, outerPerim);
             int uAxis, vAxis;
             if (normalAxis == 0) { uAxis = 1; vAxis = 2; }
@@ -293,6 +387,7 @@ namespace FlatPatternHighlight
             double GetU(Point3d p) => AxisCoord(p, uAxis);
             double GetV(Point3d p) => AxisCoord(p, vAxis);
 
+            // Compute bounding box in the plane UV coordinates.
             double bboxMinU = double.MaxValue, bboxMinV = double.MaxValue;
             double bboxMaxU = double.MinValue, bboxMaxV = double.MinValue;
 
@@ -330,11 +425,13 @@ namespace FlatPatternHighlight
                 Curve bend = bendLines[bi];
                 Point3d bs, be; GetEndPoints(bend, out bs, out be);
 
+                // Direction and length in the UV plane.
                 double bdu = GetU(be) - GetU(bs), bdv = GetV(be) - GetV(bs);
                 double blen = Math.Sqrt(bdu * bdu + bdv * bdv);
                 if (blen < 1e-6) continue;
 
                 Vector3d bdir = new Vector3d(bdu / blen, bdv / blen, 0);
+                // Perpendicular (normal) direction — rotate 90° counter-clockwise.
                 Vector3d nml = new Vector3d(-bdir.Y, bdir.X, 0);
 
                 double mu = (GetU(bs) + GetU(be)) / 2;
@@ -347,19 +444,25 @@ namespace FlatPatternHighlight
                 double longestLenA = -1, longestLenB = -1;
                 int longestIdxA = -1, longestIdxB = -1;
 
+                // Scan all perimeter curves for parallel segments on each side.
                 for (int pi = 0; pi < perimData.Count; pi++)
                 {
                     var (ps, pe, pdir, plen) = perimData[pi];
 
+                    // Filter: only curves that are approximately parallel (dot > 0.95).
                     double dot = pdir.X * bdir.X + pdir.Y * bdir.Y;
                     if (Math.Abs(dot) < 0.95) { hasArcs = true; continue; }
 
+                    // Check overlap: the perimeter segment must overlap the bend line's
+                    // projection range so we don't match irrelevant segments off to the side.
                     double t1 = (GetU(ps) - GetU(bs)) * bdir.X + (GetV(ps) - GetV(bs)) * bdir.Y;
                     double t2 = (GetU(pe) - GetU(bs)) * bdir.X + (GetV(pe) - GetV(bs)) * bdir.Y;
                     double tMin = Math.Min(t1, t2), tMax = Math.Max(t1, t2);
                     double overlap = Math.Min(blen, tMax) - Math.Max(0, tMin);
                     if (overlap <= 0) continue;
 
+                    // Project the midpoint of the perimeter segment onto the normal axis
+                    // to determine which side (A = positive normal, B = negative normal).
                     double cu = (GetU(ps) + GetU(pe)) / 2;
                     double cv = (GetV(ps) + GetV(pe)) / 2;
 
@@ -382,18 +485,21 @@ namespace FlatPatternHighlight
                     }
                 }
 
-                // Prefer the longer, more reliable perimeter line over the one that happens
-                // to touch the bounding box edge, when the latter is clearly a small/short
-                // segment (e.g. a relief notch) rather than the actual panel edge.
+                // When the farthest perimeter curve on a side is a short segment (e.g. a
+                // small relief notch at the bounding box corner), prefer the longest
+                // perimeter curve instead — it is more likely to be the actual panel edge.
                 const double SmallEdgeRatio = 0.5;
                 if (farIdxA >= 0 && longestIdxA >= 0 && perimData[farIdxA].len < SmallEdgeRatio * longestLenA)
                     farIdxA = longestIdxA;
                 if (farIdxB >= 0 && longestIdxB >= 0 && perimData[farIdxB].len < SmallEdgeRatio * longestLenB)
                     farIdxB = longestIdxB;
 
+                // Compute the distance from the bend midpoint to the bounding box edge
+                // along each normal direction.
                 double sideADist = bestIdxA >= 0 ? DistToBboxEdge(mu, mv, nml.X, nml.Y, bboxMinU, bboxMinV, bboxMaxU, bboxMaxV) : -1;
                 double sideBDist = bestIdxB >= 0 ? DistToBboxEdge(mu, mv, -nml.X, -nml.Y, bboxMinU, bboxMinV, bboxMaxU, bboxMaxV) : -1;
 
+                // Log the results for this bend.
                 lw.WriteLine($"  Bend[{bi}] Tag={bend.Tag}  Mid=({mu:F1},{mv:F1})  Dir=({bdir.X:F3},{bdir.Y:F3})  Len={blen:F1}");
                 lw.WriteLine($"    Side A (nml+): nearest={bestDistA,8:F2}  bboxDist={sideADist,8:F2}" +
                     (bestIdxA >= 0 ? $"  perimTag={outerPerim[bestIdxA].Tag}" : "  (none)"));
@@ -407,6 +513,7 @@ namespace FlatPatternHighlight
                 bendInfos.Add((bi, bend, bendPoint, bs, be, bdir, nml, bestIdxA, bestIdxB, farIdxA, farIdxB));
             }
 
+            // Create chain PMI dimensions (boundary → nearest bend → next bend → ...).
             pmiCount = CreateChainDimensions(workPart, bendInfos, perimData, outerPerim,
                 bboxMinU, bboxMinV, bboxMaxU, bboxMaxV, uAxis, vAxis, normalAxis, lw);
 
@@ -417,6 +524,14 @@ namespace FlatPatternHighlight
                 lw.WriteLine("  (some perimeter arcs were skipped — only straight lines compared)");
         }
 
+        // =====================================================================
+        // CHAIN DIMENSIONING — PMI creation
+        // =====================================================================
+
+        /// <summary>
+        /// Project a point onto a line segment (closest point on segment).
+        /// Used to place dimension origin points on boundary curves.
+        /// </summary>
         private static Point3d ProjectPointOnSegment(Point3d point, Point3d segStart, Point3d segEnd)
         {
             double vx = segEnd.X - segStart.X, vy = segEnd.Y - segStart.Y, vz = segEnd.Z - segStart.Z;
@@ -427,10 +542,16 @@ namespace FlatPatternHighlight
             return new Point3d(segStart.X + t * vx, segStart.Y + t * vy, segStart.Z + t * vz);
         }
 
-        // ──────────────────────────────────────────────────
-        // Chain dimensioning: boundary → nearest bend → next bend → ...
-        // on each side, instead of dimensioning every bend independently.
-        // ──────────────────────────────────────────────────
+        /// <summary>
+        /// Group parallel bend lines into clusters, then split each cluster into
+        /// independent lanes (flanges) based on range overlap and length similarity,
+        /// then create chain dimensions for each lane.
+        ///
+        /// "Lanes" are sets of parallel bends that share the same spatial extent
+        /// along the bend direction — they belong to the same flange chain.
+        /// Parallel bends in different lanes (e.g. left flange vs right flange)
+        /// are dimensioned independently.
+        /// </summary>
         private static int CreateChainDimensions(Part workPart,
             List<(int bi, Curve bend, Point3d pt, Point3d bs, Point3d be, Vector3d dir, Vector3d nml, int bestIdxA, int bestIdxB, int farIdxA, int farIdxB)> bendInfos,
             List<(Point3d start, Point3d end, Vector3d dir, double len)> perimData,
@@ -446,6 +567,7 @@ namespace FlatPatternHighlight
             {
                 if (used[i]) continue;
 
+                // Group bends with approximately the same direction (parallel).
                 var group = new List<int> { i };
                 used[i] = true;
                 for (int j = i + 1; j < bendInfos.Count; j++)
@@ -455,9 +577,7 @@ namespace FlatPatternHighlight
                     if (Math.Abs(dot) >= 0.95) { group.Add(j); used[j] = true; }
                 }
 
-                // Bends that are parallel but sit in different "lanes" (no overlap of their
-                // own extent) are independent flanges, not links in the same chain — split
-                // the direction-group further by range overlap before chaining each lane.
+                // Split the direction-group into lanes by range overlap.
                 foreach (var lane in ClusterByRangeOverlap(bendInfos, group, uAxis, vAxis))
                 {
                     count += CreateChainForGroup(workPart, bendInfos, lane, perimData, outerPerim,
@@ -468,8 +588,19 @@ namespace FlatPatternHighlight
             return count;
         }
 
+        /// <summary>
+        /// Threshold for considering two bends as having "similar length".
+        /// A value of 0.7 means the shorter bend must be at least 70% of the longer one.
+        /// </summary>
         private const double LaneLengthRatioThreshold = 0.7;
 
+        /// <summary>
+        /// Split a direction-group of bends into separate lanes (independent flanges)
+        /// by checking whether their projected ranges along the bend direction overlap
+        /// AND their lengths are similar.
+        ///
+        /// After initial assignment, overlapping lanes are consolidated greedily.
+        /// </summary>
         private static List<List<int>> ClusterByRangeOverlap(
             List<(int bi, Curve bend, Point3d pt, Point3d bs, Point3d be, Vector3d dir, Vector3d nml, int bestIdxA, int bestIdxB, int farIdxA, int farIdxB)> bendInfos,
             List<int> groupIdx, int uAxis, int vAxis)
@@ -511,7 +642,7 @@ namespace FlatPatternHighlight
                 }
             }
 
-            // Consolidate lanes that ended up overlapping (and similar in length) after later merges.
+            // Consolidate lanes that overlap after merges/extensions.
             bool mergedAny = true;
             while (mergedAny)
             {
@@ -540,6 +671,12 @@ namespace FlatPatternHighlight
             return lanes;
         }
 
+        /// <summary>
+        /// For a single lane (set of parallel, overlapping bends), partition bends
+        /// into two sides ("low" and "high" relative to the bounding box centre),
+        /// then create chain dimensions from the farthest perimeter curve → first bend
+        /// → next bend → etc. on each side.
+        /// </summary>
         private static int CreateChainForGroup(Part workPart,
             List<(int bi, Curve bend, Point3d pt, Point3d bs, Point3d be, Vector3d dir, Vector3d nml, int bestIdxA, int bestIdxB, int farIdxA, int farIdxB)> bendInfos,
             List<int> groupIdx,
@@ -552,6 +689,7 @@ namespace FlatPatternHighlight
             var refInfo = bendInfos[groupIdx[0]];
             Vector3d refNml = refInfo.nml;
 
+            // Project bbox corners onto the normal direction to find extents.
             double[] cornersOffset = new double[]
             {
                 bboxMinU * refNml.X + bboxMinV * refNml.Y,
@@ -562,6 +700,8 @@ namespace FlatPatternHighlight
             double bboxLow = cornersOffset.Min();
             double bboxHigh = cornersOffset.Max();
 
+            // Classify each bend as belonging to the "low" or "high" side depending
+            // on which half of the bbox it is closer to.
             var entries = new List<(int idx, double offset, bool flipped)>();
             foreach (int gi in groupIdx)
             {
@@ -581,6 +721,11 @@ namespace FlatPatternHighlight
             return count;
         }
 
+        /// <summary>
+        /// Create dimensions along one side of the chain: first dimension from the
+        /// farthest boundary curve to the nearest bend, then dimensions between
+        /// consecutive bends in offset order.
+        /// </summary>
         private static int CreateChainSide(Part workPart,
             List<(int bi, Curve bend, Point3d pt, Point3d bs, Point3d be, Vector3d dir, Vector3d nml, int bestIdxA, int bestIdxB, int farIdxA, int farIdxB)> bendInfos,
             List<(int idx, double offset, bool flipped)> side,
@@ -590,6 +735,8 @@ namespace FlatPatternHighlight
             if (side.Count == 0) return 0;
             int count = 0;
 
+            // For the first bend in the chain, create a dimension from it
+            // to the farthest boundary perimeter curve on that side.
             var first = bendInfos[side[0].idx];
             bool flipped = side[0].flipped;
             int farIdxBoundary = isLowSide
@@ -608,6 +755,7 @@ namespace FlatPatternHighlight
                 lw.WriteLine($"  [Chain] No boundary curve found for Bend Tag={first.bend.Tag} on {(isLowSide ? "low" : "high")} side.");
             }
 
+            // Chain dimensions between consecutive bends.
             for (int k = 1; k < side.Count; k++)
             {
                 var prev = bendInfos[side[k - 1].idx];
@@ -619,10 +767,21 @@ namespace FlatPatternHighlight
             return count;
         }
 
+        /// <summary>
+        /// Create a single PMI point-to-point dimension in NX.
+        ///
+        /// Uses helper points (blanked, tagged with a user attribute for later cleanup)
+        /// to anchor the dimension associativity. The dimension direction is inferred
+        /// from the bend direction: horizontal bends → vertical dimension, vertical
+        /// bends → horizontal dimension.
+        ///
+        /// The annotation plane is chosen based on the detected flat pattern normal axis.
+        /// </summary>
         private static bool CreatePmiPointDimension(Part workPart, Point3d pointA, Point3d pointB, Vector3d dir, int normalAxis, LogFile lw)
         {
             try
             {
+                // Create blanked helper points for dimension associativity.
                 Point helperA = workPart.Points.CreatePoint(pointA);
                 helperA.Blank();
                 helperA.SetUserAttribute("FlatPatternHighlightHelper", 0, "true", NXOpen.Update.Option.Later);
@@ -648,6 +807,7 @@ namespace FlatPatternHighlight
                 dimData.SetAssociativity(2, new NXOpen.Annotations.Associativity[] { assoc2 });
 
                 var pmiData = workPart.Annotations.NewPmiData();
+                // Choose annotation plane based on the flat pattern normal.
                 NXOpen.Annotations.PmiDefaultPlane planeKind;
                 switch (normalAxis)
                 {
@@ -657,11 +817,13 @@ namespace FlatPatternHighlight
                 }
                 Xform annotationPlane = workPart.Annotations.GetDefaultAnnotationPlane(planeKind);
 
+                // Place the dimension origin at the midpoint between the two points.
                 Point3d origin = new Point3d(
                     (pointA.X + pointB.X) / 2,
                     (pointA.Y + pointB.Y) / 2,
                     (pointA.Z + pointB.Z) / 2);
 
+                // Decide dimension orientation based on the predominant bend direction.
                 bool horizontalBend = Math.Abs(dir.X) >= Math.Abs(dir.Y);
                 NXObject dimObj;
                 if (horizontalBend)
@@ -669,6 +831,7 @@ namespace FlatPatternHighlight
                 else
                     dimObj = workPart.Dimensions.CreatePmiHorizontalDimension(dimData, pmiData, annotationPlane, origin);
 
+                // Tag the dimension so it can be identified/cleaned later.
                 if (dimObj != null)
                     dimObj.SetUserAttribute("FlatPatternHighlight", 0, "true", NXOpen.Update.Option.Later);
 
@@ -686,6 +849,16 @@ namespace FlatPatternHighlight
             }
         }
 
+        // =====================================================================
+        // GEOMETRY HELPERS
+        // =====================================================================
+
+        /// <summary>
+        /// Compute the distance from a point (px, py) to the bounding box edge in
+        /// a given direction (dx, dy) using ray-casting. Returns the smallest
+        /// positive parametric distance t along the ray to any bbox face.
+        /// A return value of -1 means no intersection was found.
+        /// </summary>
         private static double DistToBboxEdge(double px, double py, double dx, double dy,
             double bminX, double bminY, double bmaxX, double bmaxY)
         {
@@ -702,15 +875,31 @@ namespace FlatPatternHighlight
             return t == double.MaxValue ? -1 : t;
         }
 
-        // ──────────────────────────────────────────────────
-        // HELPERS
-        // ──────────────────────────────────────────────────
+        // =====================================================================
+        // FLAT SOLID BODY LOCATION
+        // =====================================================================
+
+        /// <summary>
+        /// Attempt to find the flat solid body that corresponds to the FlatPattern
+        /// feature. Uses three strategies in order of reliability:
+        ///
+        ///   1. flatPattern.GetBodies() — the official API, but may return null
+        ///      on some parts where the flat solid is not exposed.
+        ///   2. flatPattern.GetEntities() + cast to Body — alternative API.
+        ///   3. Iterate through workPart.Bodies, check GetFeatures() for a
+        ///      FlatPattern or FlatSolid feature, and match by tag.
+        ///
+        /// An extended diagnostic log is produced at the [diag] level to help
+        /// understand why the body might not be found on a given part.
+        /// </summary>
         private static Body FindFlatSolidBody(Part workPart, FlatPattern flatPattern, LogFile lw)
         {
+            // Strategy 1: official API.
             Body[] bodies = flatPattern.GetBodies();
             lw.WriteLine($"  [diag] flatPattern.GetBodies() count: {(bodies != null ? bodies.Length : -1)}");
             if (bodies != null && bodies.Length > 0) { lw.WriteLine($"  Body via GetBodies(): {bodies[0].Tag}"); return bodies[0]; }
 
+            // Strategy 2: entity scan.
             NXObject[] entities = flatPattern.GetEntities();
             lw.WriteLine($"  [diag] flatPattern.GetEntities() count: {(entities != null ? entities.Length : -1)}");
             if (entities != null)
@@ -720,6 +909,7 @@ namespace FlatPatternHighlight
                 foreach (var ent in entities) { Body b = ent as Body; if (b != null) { lw.WriteLine($"  Body via GetEntities(): {b.Tag}"); return b; } }
             }
 
+            // Strategy 3: exhaustive body scan (most expensive, most reliable).
             int bodyIdx = 0;
             foreach (Body body in workPart.Bodies)
             {
@@ -733,10 +923,12 @@ namespace FlatPatternHighlight
                     foreach (Feature f in features) featNames += $"{f.GetType().Name}(\"{f.GetFeatureName()}\") ";
                     lw.WriteLine($"  [diag] body #{bodyIdx} Tag={body.Tag}  IsSolidBody={isSolid}  Faces={bf.Length}  Features=[{featNames}]");
 
+                    // Look for a FlatPattern feature with matching tag.
                     foreach (Feature f in features)
                         if (f is FlatPattern fp && fp.Tag == flatPattern.Tag)
                         { lw.WriteLine($"  Body via workPart.Bodies (FlatPattern feature): {body.Tag}"); return body; }
 
+                    // Also match FlatSolid (the 3D result body of the flat pattern).
                     foreach (Feature f in features)
                         if (f is NXOpen.Features.FlatSolid)
                         { lw.WriteLine($"  Body via workPart.Bodies (FlatSolid feature): {body.Tag}"); return body; }
@@ -750,6 +942,14 @@ namespace FlatPatternHighlight
             return null;
         }
 
+        // =====================================================================
+        // UTILITY METHODS
+        // =====================================================================
+
+        /// <summary>
+        /// Locate the first FlatPattern feature in the part's feature tree.
+        /// Returns null if no flat pattern exists.
+        /// </summary>
         private static FlatPattern FindFlatPattern(Part workPart)
         {
             foreach (Feature f in workPart.Features)
@@ -757,6 +957,11 @@ namespace FlatPatternHighlight
             return null;
         }
 
+        /// <summary>
+        /// Get the start and end points of any Curve (Line or Arc).
+        /// For arcs, computes the endpoints from the arc centre, radius, and
+        /// start/end angles. Returns (0,0,0) for unsupported curve types.
+        /// </summary>
         private static void GetEndPoints(Curve curve, out Point3d p1, out Point3d p2)
         {
             Line line = curve as Line;
@@ -774,14 +979,30 @@ namespace FlatPatternHighlight
             p1 = new Point3d(0, 0, 0); p2 = new Point3d(0, 0, 0);
         }
 
+        /// <summary>
+        /// Highlight all objects in the list (used to draw attention to
+        /// the outer perimeter, bend lines, etc. in the NX graphics window).
+        /// </summary>
         private static void HighlightObjects(List<DisplayableObject> objects)
         {
             if (objects.Count == 0) return;
             foreach (var o in objects) o.Highlight();
         }
 
+        // =====================================================================
+        // NX Menu / Lifecycle
+        // =====================================================================
+
+        /// <summary>
+        /// Required by NX: return the unload behaviour.
+        /// Immediately = the DLL can be unloaded after the action completes.
+        /// </summary>
         public static int GetUnloadOption(string arg) { return (int)Session.LibraryUnloadOption.Immediately; }
 
+        /// <summary>
+        /// Called by NX when the DLL is loaded (on NX startup if registered).
+        /// Registers the menu callback so clicking the menu item runs Main().
+        /// </summary>
         public static int Startup()
         {
             try
@@ -795,6 +1016,9 @@ namespace FlatPatternHighlight
             catch { return 1; }
         }
 
+        /// <summary>
+        /// Menu callback — delegates to the Main entry point.
+        /// </summary>
         private static MenuBarManager.CallbackStatus OnMenuCallback(MenuButtonEvent buttonEvent)
         {
             Main(new string[0]);
