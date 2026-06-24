@@ -81,10 +81,45 @@ FlatPatternHighlight/
 ├── FlatPatternHighlight.cs      # Código fonte (800+ linhas, completamente documentado)
 ├── FlatPatternHighlight.csproj  # Projeto .NET Framework 4.8 / x64
 ├── FlatPatternHighlight.men     # Arquivo de menu NX (antes do Help)
+├── FlatPatternHighlight.rtb     # Arquivo de ribbon tab NX (aba "Flat Pattern")
 ├── build.ps1                    # Script de build + assinatura
 ├── .gitignore                   # Exclui bin/, obj/, *.prt, *.pdf, dados de teste
 └── README.md                    # Esta documentação
 ```
+
+### Arquivo `.rtb` — Registro na Ribbon
+
+O arquivo `FlatPatternHighlight.rtb` adiciona uma aba personalizada na faixa de opções do NX.
+
+Formato (`.rtb` = Ribbon Tab):
+
+```rtb
+VERSION 170
+TITLE  Flat Pattern
+
+BEGIN_GROUP FLAT_PATTERN_GROUP
+LABEL Highlight
+BITMAP  appl_flat_pattern
+
+    BUTTON  FLAT_PATTERN_HIGHLIGHT
+    RIBBON_STYLE  ALWAYS_MEDIUM_IMAGE_AND_TEXT
+
+END_GROUP
+```
+
+Estrutura:
+- **`VERSION 170`** — versão do formato de ribbon do NX 2512
+- **`TITLE`** — nome da aba que aparece na faixa de opções
+- **`BEGIN_GROUP ... END_GROUP`** — define um grupo dentro da aba
+- **`LABEL`** — rótulo do grupo
+- **`BITMAP`** — ícone do grupo (usa bitmap interno do NX)
+- **`BUTTON`** — referência ao mesmo action ID registrado no `.men` e na `Startup()`
+- **`RIBBON_STYLE`** — estilo de exibição no ribbon:
+  - `ALWAYS_MEDIUM_IMAGE_AND_TEXT` — ícone médio + texto
+  - `ALWAYS_LARGE_IMAGE` — ícone grande sem texto
+  - `SMALL_IMAGE` — ícone pequeno
+
+A ribbon substitui o menu tradicional quando ambos estão presentes — o menu fica como fallback para versões sem ribbon.
 
 ### Arquivo `.men` — Registro no Menu
 
@@ -176,16 +211,18 @@ Size:     16 KB
 3. Selecione `FlatPatternHighlight.dll`
 4. Os 3 steps executam em sequência, com highlights visuais e saída no Log File
 
-### Via Menu (requer assinatura)
+### Via Menu + Ribbon (requer assinatura)
 
-1. Copie `FlatPatternHighlight.dll` e `FlatPatternHighlight.men` para uma pasta `startup` do NX:
+1. Copie os 3 arquivos para uma pasta `startup` do NX:
    ```powershell
    Copy-Item "bin\Debug\FlatPatternHighlight.dll" "$env:UGII_USER_DIR\startup\"
    Copy-Item "FlatPatternHighlight.men" "$env:UGII_USER_DIR\startup\"
+   Copy-Item "FlatPatternHighlight.rtb" "$env:UGII_USER_DIR\startup\"
    ```
 2. Reinicie o NX
 3. O menu **Flat Pattern → Highlight Exterior Curves** aparece antes do Help
-4. A assinatura requer a licença `DotNet Author License` no servidor NX
+4. A aba **Flat Pattern** aparece na faixa de opções (ribbon) do Modeling, com o grupo **Highlight** e o botão **Highlight Exterior Curves**
+5. A assinatura requer a licença `DotNet Author License` no servidor NX
 
 ### Para Remover Cotas PMI Geradas
 
