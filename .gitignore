@@ -1,0 +1,9 @@
+bin/
+obj/
+*.user
+*.suo
+.vs/
+NXSigningResource.res
+02 - Arquivos Flat Pattern/
+*.prt
+*.pdf
