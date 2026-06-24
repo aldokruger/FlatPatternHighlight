@@ -8,15 +8,14 @@
 !  The BUTTON references the same action ID (FLAT_PATTERN_HIGHLIGHT)
 !  that is registered by the .men file via Startup() → AddMenuAction.
 !
-VERSION 170
 TITLE  Flat Pattern
+VERSION 170
 
 !
 !  Group: Highlight — single button to run the analysis
 !
 BEGIN_GROUP FLAT_PATTERN_GROUP
 LABEL Highlight
-BITMAP  appl_flat_pattern
 
     BUTTON  FLAT_PATTERN_HIGHLIGHT
     RIBBON_STYLE  ALWAYS_MEDIUM_IMAGE_AND_TEXT
