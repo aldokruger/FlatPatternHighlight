@@ -67,7 +67,7 @@ namespace FlatPatternHighlight
         /// Main entry — called when the user runs the DLL via File → Execute → NX Open
         /// (Ctrl+U), or from the menu callback.
         /// </summary>
-        public static void Main(string[] args)
+        public static int Main(string[] args)
         {
             try
             {
@@ -82,7 +82,7 @@ namespace FlatPatternHighlight
                         "Flat Pattern Highlight",
                         NXMessageBox.DialogType.Error,
                         "No active work part. Open or create a part first.");
-                    return;
+                    return 1;
                 }
 
                 // Locate the FlatPattern feature — without it there is nothing to analyse.
@@ -95,7 +95,7 @@ namespace FlatPatternHighlight
                         "No Flat Pattern feature found.\n\n" +
                         "The active part must contain a Sheet Metal flat pattern.\n" +
                         "Use Insert > Sheet Metal > Flat Pattern to create one first.");
-                    return;
+                    return 1;
                 }
 
                 // Write everything to the NX LogFile (available from Help → Log File).
@@ -119,6 +119,7 @@ namespace FlatPatternHighlight
                     AnalyzeBendToPerimeter(bendLines, outerPerim, lw, workPart);
 
                 lw.WriteLine("=== End of Diagnostic Log ===");
+                return 0;
             }
             catch (NXException ex)
             {
@@ -127,6 +128,7 @@ namespace FlatPatternHighlight
                         "Flat Pattern Highlight - Error",
                         NXMessageBox.DialogType.Error,
                         $"NX Error: {ex.Message}");
+                return ex.ErrorCode != 0 ? ex.ErrorCode : 1;
             }
             catch (Exception ex)
             {
@@ -135,6 +137,7 @@ namespace FlatPatternHighlight
                         "Flat Pattern Highlight - Error",
                         NXMessageBox.DialogType.Error,
                         $"Error: {ex.Message}");
+                return 1;
             }
         }
 
@@ -1008,7 +1011,7 @@ namespace FlatPatternHighlight
         /// No longer registers AddMenuAction — the .men file's NXOpen:: syntax
         /// resolves the action directly. Kept as a required NX lifecycle method.
         /// </summary>
-        public static int Startup()
+        public static int Startup(string[] args)
         {
             return 0;
         }

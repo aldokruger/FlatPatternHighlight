@@ -6,7 +6,7 @@
 !  ribbon tab to appear in the NX Modeling ribbon bar.
 !
 !  The BUTTON references the same action ID (FLAT_PATTERN_HIGHLIGHT)
-!  that is registered by the .men file via Startup() → AddMenuAction.
+!  that is defined by the .men file's ACTIONS NXOpen::... binding.
 !
 TITLE  Flat Pattern
 VERSION 170

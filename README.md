@@ -140,7 +140,7 @@ ACTIONS NXOpen::FlatPatternHighlight.HighlightFlatPattern::Main
 END_OF_MENU
 ```
 
-**`ACTIONS NXOpen::Namespace.Class::Method`** — Esta sintaxe (disponível desde NX 12) instrui o NX a chamar diretamente o método estático `Main` da classe `HighlightFlatPattern` no assembly `FlatPatternHighlight.dll`. Não requer `AddMenuAction()` nem DLL assinada — funciona inclusive com DLLs carregadas por Ctrl+U.
+**`ACTIONS NXOpen::Namespace.Class::Method`** — Esta sintaxe (disponível desde NX 12) instrui o NX a chamar diretamente o método estático `Main` da classe `HighlightFlatPattern` no assembly `FlatPatternHighlight.dll`. Para C#, o entry point deve seguir a assinatura `public static int Main(string[] args)`. Não requer `AddMenuAction()`; a DLL assinada só é necessária quando você depende de `Startup` para auto-load no início da sessão.
 
 O menu aparece como **Flat Pattern → Highlight Exterior Curves** antes do menu Help.
 
@@ -218,7 +218,7 @@ Size:     16 KB
 
 ### Via Menu + Ribbon (funciona sem assinatura)
 
-O `.men` usa a sintaxe `ACTIONS NXOpen::...` que chama o método C# diretamente, sem necessidade de `AddMenuAction()` ou DLL assinada.
+O `.men` usa a sintaxe `ACTIONS NXOpen::...` que chama o método C# diretamente, sem necessidade de `AddMenuAction()`. Para essa rota funcionar no NX 2512, mantenha o entry point como `public static int Main(string[] args)`.
 
 1. Copie os 3 arquivos para uma pasta `startup` do NX:
    ```powershell
@@ -439,6 +439,6 @@ Estas dobras têm um lado que encosta diretamente na borda do bounding box — s
 
 A assinatura do assembly (`SignDotNet.exe`) requer a licença **`DotNet Author License`** no servidor de licenças NX.
 
-**Desde NX 12**, o arquivo `.men` pode usar a sintaxe `ACTIONS NXOpen::Namespace.Class::Method`, que chama o método .NET diretamente sem necessidade de `AddMenuAction()` ou DLL assinada. Portanto o menu e a ribbon funcionam **com ou sem assinatura**.
+**Desde NX 12**, o arquivo `.men` pode usar a sintaxe `ACTIONS NXOpen::Namespace.Class::Method`, que chama o método .NET diretamente sem necessidade de `AddMenuAction()`. Para C#, use a assinatura `public static int Main(string[] args)`. Se a DLL estiver em `startup` e depender de `Startup`, esse entry point também deve seguir `public static int Startup(string[] args)`.
 
 A assinatura só é necessária se o plugin precisar fazer parte do fluxo de inicialização automática do NX (ex: carregar antes de outros componentes). Para uso normal (Ctrl+U ou menu/ribbon via `startup`), a assinatura é opcional.
