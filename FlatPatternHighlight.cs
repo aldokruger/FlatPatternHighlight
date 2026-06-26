@@ -838,46 +838,61 @@ namespace FlatPatternHighlight
             int boundaryIdx;
             if (isDiagonalBend)
             {
-                // Use the NEAREST parallel perimeter edge that is a true boundary.
-                // If the nearest edge is suspiciously close (bestDist / secondBestDist < 0.3),
-                // it is likely a cutout/notch edge — use secondBest instead.
-                // Search for a parallel Line across both sides to avoid Arcs.
-                int rawA = first.bestIdxA, rawB = first.bestIdxB;
-                if (first.secondBestIdxA >= 0 && first.bestDistA / first.secondBestDistA < 0.3)
-                    rawA = first.secondBestIdxA;
-                if (first.secondBestIdxB >= 0 && first.bestDistB / first.secondBestDistB < 0.3)
-                    rawB = first.secondBestIdxB;
-                int rawIdx;
-                int lineIdx;
-                if (first.bestLineIdxA >= 0 && first.bestLineIdxB >= 0)
+                // For diagonal bends, use the side from the chain direction
+                // (isLowSide/flipped). Apply secondBest correction on that side.
+                // If the preferred side has only a cutout (ratio < 0.3 and no secondBest
+                // available), fall back to the other side.
+                int prefIdx, prefSecond;
+                double prefDist, prefSecondDist;
+                if (isLowSide)
                 {
-                    // Both sides have a parallel Line — pick the nearer one.
-                    double distA = rawA >= 0 ? Math.Abs(first.bestDistA) : double.MaxValue;
-                    double distB = rawB >= 0 ? Math.Abs(first.bestDistB) : double.MaxValue;
-                    if (distA <= distB)
-                        { rawIdx = rawA; lineIdx = first.bestLineIdxA; }
-                    else
-                        { rawIdx = rawB; lineIdx = first.bestLineIdxB; }
-                }
-                else if (first.bestLineIdxA >= 0)
-                {
-                    rawIdx = rawA;
-                    lineIdx = first.bestLineIdxA;
-                }
-                else if (first.bestLineIdxB >= 0)
-                {
-                    rawIdx = rawB;
-                    lineIdx = first.bestLineIdxB;
+                    prefIdx = flipped ? first.bestIdxA : first.bestIdxB;
+                    prefDist = flipped ? first.bestDistA : first.bestDistB;
+                    prefSecond = flipped ? first.secondBestIdxA : first.secondBestIdxB;
+                    prefSecondDist = flipped ? first.secondBestDistA : first.secondBestDistB;
                 }
                 else
                 {
-                    // No parallel Line on either side — use nearest (with secondBest correction).
-                    double distA = rawA >= 0 ? Math.Abs(first.bestDistA) : double.MaxValue;
-                    double distB = rawB >= 0 ? Math.Abs(first.bestDistB) : double.MaxValue;
-                    rawIdx = distA <= distB ? rawA : rawB;
-                    lineIdx = -1;
+                    prefIdx = flipped ? first.bestIdxB : first.bestIdxA;
+                    prefDist = flipped ? first.bestDistB : first.bestDistA;
+                    prefSecond = flipped ? first.secondBestIdxB : first.secondBestIdxA;
+                    prefSecondDist = flipped ? first.secondBestDistB : first.secondBestDistA;
                 }
-                boundaryIdx = lineIdx >= 0 ? lineIdx : rawIdx;
+                // If preferred side has a valid non-cutout boundary, use it.
+                bool prefIsCutout = prefSecond >= 0 && prefDist / prefSecondDist < 0.3;
+                if (!prefIsCutout)
+                {
+                    boundaryIdx = prefIdx;  // no correction needed
+                }
+                else
+                {
+                    // Preferred side has a cutout edge — use secondBest if available,
+                    // otherwise fall back to the other side's nearest (corrected).
+                    if (prefSecond >= 0)
+                        boundaryIdx = prefSecond;
+                    else
+                    {
+                        // Fall back to the other side's nearest, with secondBest correction.
+                        int altIdx, altSecond;
+                        double altDist, altSecondDist;
+                        if (isLowSide)
+                        {
+                            altIdx = flipped ? first.bestIdxB : first.bestIdxA;
+                            altDist = flipped ? first.bestDistB : first.bestDistA;
+                            altSecond = flipped ? first.secondBestIdxB : first.secondBestIdxA;
+                            altSecondDist = flipped ? first.secondBestDistB : first.secondBestDistA;
+                        }
+                        else
+                        {
+                            altIdx = flipped ? first.bestIdxA : first.bestIdxB;
+                            altDist = flipped ? first.bestDistA : first.bestDistB;
+                            altSecond = flipped ? first.secondBestIdxA : first.secondBestIdxB;
+                            altSecondDist = flipped ? first.secondBestDistA : first.secondBestDistB;
+                        }
+                        boundaryIdx = (altSecond >= 0 && altDist / altSecondDist < 0.3)
+                            ? altSecond : altIdx;
+                    }
+                }
             }
             else
                 boundaryIdx = isLowSide
