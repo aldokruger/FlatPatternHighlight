@@ -823,51 +823,35 @@ namespace FlatPatternHighlight
             int boundaryIdx;
             if (isDiagonalBend)
             {
-                // Use the FARTHEST parallel perimeter edge to avoid cutout edges
-                // (which are interior to the flange and closer to the bend line).
-                // The farthest parallel edge is most likely the true flange boundary.
+                // Use the NEAREST parallel perimeter edge (the true flange boundary).
+                // Search for a parallel Line across both sides to avoid Arcs.
                 int rawIdx;
                 int lineIdx;
-                if (first.farLineIdxA >= 0 && first.farLineIdxB >= 0)
+                if (first.bestLineIdxA >= 0 && first.bestLineIdxB >= 0)
                 {
                     // Both sides have a parallel Line — pick the nearer one (by bestDist).
                     if (first.bestDistA <= first.bestDistB)
-                        { rawIdx = first.farIdxA; lineIdx = first.farLineIdxA; }
-                    else
-                        { rawIdx = first.farIdxB; lineIdx = first.farLineIdxB; }
-                }
-                else if (first.farLineIdxA >= 0)
-                {
-                    rawIdx = first.farIdxA;
-                    lineIdx = first.farLineIdxA;
-                }
-                else if (first.farLineIdxB >= 0)
-                {
-                    rawIdx = first.farIdxB;
-                    lineIdx = first.farLineIdxB;
-                }
-                else if (first.bestLineIdxA >= 0 || first.bestLineIdxB >= 0)
-                {
-                    // No farthest parallel Line — fall back to nearest parallel Line.
-                    if (first.bestLineIdxA >= 0 && first.bestLineIdxB >= 0)
-                    {
-                        if (first.bestDistA <= first.bestDistB)
-                            { rawIdx = first.bestIdxA; lineIdx = first.bestLineIdxA; }
-                        else
-                            { rawIdx = first.bestIdxB; lineIdx = first.bestLineIdxB; }
-                    }
-                    else if (first.bestLineIdxA >= 0)
                         { rawIdx = first.bestIdxA; lineIdx = first.bestLineIdxA; }
                     else
                         { rawIdx = first.bestIdxB; lineIdx = first.bestLineIdxB; }
                 }
+                else if (first.bestLineIdxA >= 0)
+                {
+                    rawIdx = first.bestIdxA;
+                    lineIdx = first.bestLineIdxA;
+                }
+                else if (first.bestLineIdxB >= 0)
+                {
+                    rawIdx = first.bestIdxB;
+                    lineIdx = first.bestLineIdxB;
+                }
                 else
                 {
-                    // No parallel Line at all — use farthest parallel (any type).
+                    // No parallel Line on either side — use nearest parallel (any type).
                     if (first.bestDistA <= first.bestDistB)
-                        rawIdx = first.farIdxA;
+                        rawIdx = first.bestIdxA;
                     else
-                        rawIdx = first.farIdxB;
+                        rawIdx = first.bestIdxB;
                     lineIdx = -1;
                 }
                 boundaryIdx = lineIdx >= 0 ? lineIdx : rawIdx;
