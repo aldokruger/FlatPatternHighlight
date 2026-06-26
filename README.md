@@ -24,6 +24,7 @@ Substitui a contagem manual de dobras e a identificação visual do contorno ext
 - [Interpretação dos Resultados](#interpretação-dos-resultados)
 - [Limitações Conhecidas](#limitações-conhecidas)
 - [Próximos Passos](#próximos-passos)
+- [Changelog](#changelog)
 
 ---
 
@@ -78,11 +79,12 @@ Main()
 
 ```
 FlatPatternHighlight/
-├── FlatPatternHighlight.cs      # Código fonte (800+ linhas, completamente documentado)
+├── FlatPatternHighlight.cs      # Código fonte (1450 linhas, completamente documentado)
 ├── FlatPatternHighlight.csproj  # Projeto .NET Framework 4.8 / x64
 ├── FlatPatternHighlight.men     # Arquivo de menu NX (antes do Help)
 ├── FlatPatternHighlight.rtb     # Arquivo de ribbon tab NX (aba "Flat Pattern")
 ├── build.ps1                    # Script de build + assinatura
+├── CHANGELOG.md                 # Histórico de evolução do algoritmo
 ├── .gitignore                   # Exclui bin/, obj/, *.prt, *.pdf, dados de teste
 └── README.md                    # Esta documentação
 ```
@@ -286,12 +288,17 @@ Para cada linha de dobra:
 3. **Para cada bend line:**
    - Direção unitária + normal perpendicular ($-dy, dx$)
    - Midpoint no plano UV
-   - Varre as curvas de perímetro:
-     - **Filtro paralelo**: dot product > 0.95 (rejeita arcos e curvas perpendiculares)
-     - **Filtro de overlap**: projeta os endpoints da curva de perímetro na direção da bend line e verifica se há sobreposição
-   - Projeta o midpoint de cada curva candidata na normal → lado positivo (A) ou negativo (B)
-   - Seleciona a curva **mais próxima** (nearest) e a **mais distante** (farIdx) em cada lado
-   - **Heurística de qualidade**: se a curva mais distante for muito curta (<50% da curva mais longa no mesmo lado), troca para a mais longa — evita que notches pequenos sejam identificados como borda externa
+   - **Filtro de artefato**: pula dobras cujo midpoint 3D fica a <0,5 mm do perímetro (NX às vezes retorna bordas como "bend lines")
+   - Varre as curvas de perímetro rastreando **múltiplos candidatos por lado** (A=nml+, B=nml-):
+     - **Filtro paralelo**: dot product > 0,95 (rejeita arcos e curvas perpendiculares)
+     - **Filtro de overlap**: projeta os endpoints da curva na direção da bend line e exige sobreposição
+     - `bestIdx`/`bestDist` — curva paralela mais próxima (com overlap)
+     - `secondBestIdx` — 2ª mais próxima (detecta cutout: ver Chain PMI)
+     - `farIdx` — mais distante (candidato a borda externa)
+     - `nearIdx` — mais próxima **sem** filtro de paralelismo (fallback p/ diagonais)
+     - `bestLineIdx`/`farLineIdx` — mesmas métricas restritas a `Line` (ignora Arc)
+   - **Correção small-edge** (`SmallEdgeRatio = 0,5`): se a mais distante for <50% da mais longa do mesmo lado, troca para a mais longa — evita que notches de canto curtos sejam vistos como borda externa
+   - **Dobras diagonais** (`|dir.X|>0,2` E `|dir.Y|>0,2`): raramente têm perímetro perfeitamente paralelo; relaxa para Line preferencial e cai no `nearIdx` se necessário
 
 4. **Distância ao BBox**: ray-cast do midpoint em cada direção normal até encontrar a borda do bounding box.
 
@@ -317,21 +324,35 @@ Bend[0] Tag=66084  Mid=(832,1,76,8)  Dir=(1,000,0,000)  Len=1662,2
 
 **Objetivo:** Criar cotas PMI em cadeia em vez de cotas independentes para cada dobra.
 
-**Algoritmo por lane:**
+**Algoritmo por lane (lado low e lado high):**
 
 1. **Particiona em low/high side** — projeta cada dobra na normal de referência e classifica como "lado baixo" (mais perto do bbox mínimo) ou "lado alto" (mais perto do bbox máximo).
 2. **Ordena** cada lado por offset (crescente no low side, decrescente no high side).
-3. **Cria cotas:**
-   - 1ª cota: da curva de perímetro **mais distante** (farIdx) projetada na direção da normal → midpoint da 1ª dobra
-   - Cotas seguintes: entre midpoints consecutivos
+3. **Seleção do boundary (1ª cota)** — método **unificado "nearest corrected cross-side"**:
+   - Parte dos candidatos `bestIdxA`/`bestIdxB` (curva paralela mais próxima de cada lado).
+   - **Skip de cutout**: se `best / secondBest < 0.3`, a "mais próxima" é provavelmente um recorte fino grudado na dobra → troca para a `secondBest`. Threshold 0.3 = observação empírica de cutouts a <30% da distância da borda real.
+   - **Preferência Line sobre Arc**: entre os dois lados corrigidos, escolhe o mais próximo, priorizando `Line`. Arcs causam o erro NX 1175009 no builder perpendicular.
+4. **Cria cotas:**
+   - 1ª cota: da curva de boundary selecionada → midpoint da 1ª dobra
+   - Cotas seguintes: entre midpoints consecutivos das dobras
 
-**Criação PMI:**
+#### Cascata de fallback (cada estágio mais tolerante a falhas)
 
-- Usa `Points.CreatePoint()` com pontos auxiliares blanked (atributo `"FlatPatternHighlightHelper"` para limpeza futura)
-- Associatividade via `Annotations.NewAssociativity()`
-- Plano de anotação: XY, XZ ou YZ do WCS (detectado automaticamente)
-- Direção da cota: **horizontal** se a dobra for predominantemente vertical, **vertical** se a dobra for horizontal
-- Todas as cotas recebem o atributo `"FlatPatternHighlight" = "true"`
+| Estágio | Gatilho | Resultado |
+|---|---|---|
+| **1. Cota PMI perpendicular** | caminho ideal | Cota entre 2 Curves (`MeasurementMethod.Perpendicular`) |
+| **2. Indicator-line vermelha** | boundary é **Arc** (não Line) | Linha vermelha (cor 36) entre os pontos — sem cota |
+| **3. Indicator-line vermelha** | sem licença PMI/GD&T (erro **948802**) | Linha vermelha + distância logada |
+| **4. Point-fallback** | outro erro do builder | Cota horizontal/vertical entre 2 Points auxiliares blanked |
+| **5. Fallback de nearIdx** | nenhum paralelo encontrado | Usa a curva mais próxima sem filtro de paralelismo |
+
+> **Por que Line é obrigatório no estágio 1?** `PmiRapidDimensionBuilder` com `MeasurementMethod.Perpendicular` exige uma `Line` como 1ª referência. Fillets de canto (Arc) rejeitam a cota e disparam o estágio 2.
+
+**Marcação para limpeza:**
+- Cotas/indicator-lines → atributo `"FlatPatternHighlight" = "true"`
+- Points auxiliares (blanked) → atributo `"FlatPatternHighlightHelper" = "true"`
+- Plano de anotação: XY, XZ ou YZ do WCS (detectado automaticamente via `DetectNormalAxis`)
+- Direção da cota no point-fallback: **horizontal** se a variação dominante for X, **vertical** se for Y
 
 ---
 
@@ -416,7 +437,7 @@ Estas dobras têm um lado que encosta diretamente na borda do bounding box — s
 
 2. **Arcos no perímetro** — Arcos são ignorados na comparação de paralelismo (Step 3) porque não têm uma direção única. O log indica `"(some perimeter arcs were skipped)"`.
 
-3. **PMI em partes sem anotações habilitadas** — A criação de cotas PMI pode falhar em parts que não têm o ambiente PMI ativo. O erro é logado e o plugin continua sem as cotas.
+3. **PMI em partes sem anotações habilitadas** — A criação de cotas PMI pode falhar em parts que não têm o ambiente PMI ativo ou sem licença GD&T (erro 948802). Nesses casos o plugin cai na cascata de fallback (indicator-line vermelha → point-fallback) e continua sem interromper — ver [Chain PMI Dimensioning](#chain-pmi-dimensioning).
 
 4. **Plano de anotação** — O plano de anotação é inferido da normal do flat pattern. Se o flat pattern não estiver alinhado com os planos principais do WCS, as cotas podem ficar orientadas incorretamente.
 
@@ -442,3 +463,16 @@ A assinatura do assembly (`SignDotNet.exe`) requer a licença **`DotNet Author L
 **Desde NX 12**, o arquivo `.men` pode usar a sintaxe `ACTIONS NXOpen::Namespace.Class::Method`, que chama o método .NET diretamente sem necessidade de `AddMenuAction()`. Para C#, use a assinatura `public static int Main(string[] args)`. Se a DLL estiver em `startup` e depender de `Startup`, esse entry point também deve seguir `public static int Startup(string[] args)`.
 
 A assinatura só é necessária se o plugin precisar fazer parte do fluxo de inicialização automática do NX (ex: carregar antes de outros componentes). Para uso normal (Ctrl+U ou menu/ribbon via `startup`), a assinatura é opcional.
+
+---
+
+## Changelog
+
+Histórico completo da evolução em [`CHANGELOG.md`](CHANGELOG.md). Resumo:
+
+- **[Unreleased]** — Documentação refinada (comentários no código, README atualizado, CHANGELOG criado)
+- **2026-06** — Unificação da seleção de boundary ("nearest corrected cross-side") com skip de cutout via `secondBest`; fallbacks PMI (indicator-line p/ Arc e sem licença, point-fallback)
+- **2026-06** — Tratamento iterativo de dobras diagonais (vários commits: nearest/farthest/Line/nearIdx)
+- **2026-06** — Skip de bridge dimension redundante quando há 1 dobra por lado
+- **2026-06** — Fix de compilação (`boundaryIdx` não declarado, `outerPerim` faltante em `CreateChainSide`)
+- **2026-06** — Versão inicial: 3 steps (perímetro, dobras, proximidade) com cotas PMI em cadeia

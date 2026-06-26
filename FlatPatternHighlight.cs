@@ -417,6 +417,34 @@ namespace FlatPatternHighlight
             lw.WriteLine("");
 
             bool hasArcs = false;
+            // ===================================================================
+            // bendInfos — resultado consolidado de cada linha de dobra analisada.
+            // Esta tupla (23 campos) carrega tudo o que o Chain PMI precisa para
+            // escolher a curva de boundary e criar as cotas. Campos por grupo:
+            //
+            //   Identidade / geometria:
+            //     bi      - índice original em bendLines (debug)
+            //     bend    - objeto Curve da linha de dobra
+            //     pt      - midpoint 3D (ponto de pick da cota)
+            //     bs, be  - endpoints 3D da dobra
+            //     dir     - direção unitária no plano UV
+            //     nml     - normal perpendicular à dobra (-dy, dx)
+            //
+            //   Candidatos de perímetro por LADO (A = nml+, B = nml-):
+            //     bestIdx / bestDist       - curva PARALELA mais próxima (com overlap)
+            //     secondBestIdx / Dist     - 2ª curva paralela mais próxima;
+            //                               usada para detectar cutout: quando
+            //                               best/secondBest < 0.3, a "mais próxima"
+            //                               é provavelmente um recorte fino e
+            //                               segundo a real.
+            //     farIdx                   - curva paralela mais DISTANTE (histórico;
+            //                               usado como fallback de borda externa)
+            //     nearIdx                  - curva mais próxima SEM filtro de
+            //                               paralelismo (fallback p/ dobras
+            //                               diagonais que não têm paralela)
+            //     bestLineIdx / farLineIdx - mesmas métricas, mas restritas a Line
+            //                               (ignora Arc); preferido na dimensão PMI
+            // ===================================================================
             var bendInfos = new List<(int bi, Curve bend, Point3d pt, Point3d bs, Point3d be, Vector3d dir, Vector3d nml,
                 int bestIdxA, int bestIdxB, int farIdxA, int farIdxB, int nearIdxA, int nearIdxB,
                 int bestLineIdxA, int bestLineIdxB, int farLineIdxA, int farLineIdxB,
@@ -461,6 +489,15 @@ namespace FlatPatternHighlight
                     }
                 }
 
+                // Rastreia múltiplos candidatos POR LADO (A=nml+, B=nml-) simultaneamente.
+                // Mantemos tantas variantes porque nenhuma métrica isolada é robusta:
+                //   - best/secondBest: a "mais próxima" pode ser um cutout fino; o ratio
+                //     best/secondBest revela isso (heurística do skip de cutout).
+                //   - far: a "mais distante" costuma ser a borda externa, mas pode ser
+                //     um notch pequeno de canto → corrigido por longestIdx.
+                //   - near: sem filtro de paralelismo, garante fallback p/ diagonais.
+                //   - bestLine/farLine: ignora Arc (fillet de canto) porque a cota PMI
+                //     perpendicular exige Line como 1ª referência.
                 double bestDistA = double.MaxValue, bestDistB = double.MaxValue;
                 int bestIdxA = -1, bestIdxB = -1;
                 double secondBestDistA = double.MaxValue, secondBestDistB = double.MaxValue;
@@ -546,15 +583,17 @@ namespace FlatPatternHighlight
                     }
                 }
 
-                // When the farthest perimeter curve on a side is a short segment (e.g. a
-                // small relief notch at the bounding box corner), prefer the longest
-                // perimeter curve instead — it is more likely to be the actual panel edge.
+                // --- Correção de small-edge (notch de canto) ---
+                // A curva paralela mais distante (farIdx) costuma ser a borda externa,
+                // mas em cantos com alívio/notch pode ser um segmento curto e enganoso.
+                // Se ela for < 50% (SmallEdgeRatio) do segmento mais longo do mesmo
+                // lado, trocamos para o mais longo — mais provável de ser a aba real.
                 const double SmallEdgeRatio = 0.5;
                 if (farIdxA >= 0 && longestIdxA >= 0 && perimData[farIdxA].len < SmallEdgeRatio * longestLenA)
                     farIdxA = longestIdxA;
                 if (farIdxB >= 0 && longestIdxB >= 0 && perimData[farIdxB].len < SmallEdgeRatio * longestLenB)
                     farIdxB = longestIdxB;
-                // Also apply small-edge correction to farLineIdx.
+                // Aplica a mesma correção aos candidatos restritos a Line.
                 if (farLineIdxA >= 0 && longestIdxA >= 0 && perimData[farLineIdxA].len < SmallEdgeRatio * longestLenA)
                     farLineIdxA = longestIdxA;
                 if (farLineIdxB >= 0 && longestIdxB >= 0 && perimData[farLineIdxB].len < SmallEdgeRatio * longestLenB)
@@ -575,11 +614,15 @@ namespace FlatPatternHighlight
 
                 lw.WriteLine("");
 
-                // For diagonal bends with no parallel perimeter on a side, fall back
-                // to the nearest perimeter edge (regardless of parallelism).
+                // --- Fallback para dobras diagonais ---
+                // Uma dobra é "diagonal" quando tem componente significativa em ambos
+                // os eixos do plano UV (|dir.X|>0.2 E |dir.Y|>0.2). Essas dobras raramente
+                // têm curva de perímetro perfeitamente paralela, então relaxamos:
+                //   1. se o candidato mais próximo for Arc, troca para o Line paralelo;
+                //   2. se não houver paralelo, usa o nearIdx (mais próximo sem filtro
+                //      de paralelismo) como último recurso.
                 if (Math.Abs(bdir.X) > 0.2 && Math.Abs(bdir.Y) > 0.2)
                 {
-                    // Prefer parallel Line over Arc; fall back to nearIdx if nothing found.
                     if (bestIdxA >= 0 && !(perimData[bestIdxA].curve is Line) && bestLineIdxA >= 0)
                         bestIdxA = bestLineIdxA;
                     if (bestIdxB >= 0 && !(perimData[bestIdxB].curve is Line) && bestLineIdxB >= 0)
@@ -587,7 +630,7 @@ namespace FlatPatternHighlight
                     if (bestIdxA < 0) { bestIdxA = nearIdxA; }
                     if (bestIdxB < 0) { bestIdxB = nearIdxB; }
                 }
-                // For non-diagonal bends, also ensure farIdx fallback.
+                // Para dobras não-diagonais, garante farIdx mesmo sem paralelo.
                 if (farIdxA < 0) farIdxA = nearIdxA;
                 if (farIdxB < 0) farIdxB = nearIdxB;
 
@@ -809,9 +852,10 @@ namespace FlatPatternHighlight
         }
 
         /// <summary>
-        /// Create dimensions along one side of the chain: first dimension from the
-        /// farthest boundary curve to the nearest bend, then dimensions between
-        /// consecutive bends in offset order.
+        /// <summary>
+        /// Cria cotas ao longo de um lado da cadeia: a primeira cota vai da curva de
+        /// boundary (selecionada por <see cref="CreateChainForGroup"/>) até a 1ª dobra,
+        /// e as seguintes conectam dobras consecutivas na ordem de offset.
         /// </summary>
         private static int CreateChainSide(Part workPart,
             List<(int bi, Curve bend, Point3d pt, Point3d bs, Point3d be, Vector3d dir, Vector3d nml, int bestIdxA, int bestIdxB, int farIdxA, int farIdxB, int nearIdxA, int nearIdxB, int bestLineIdxA, int bestLineIdxB, int farLineIdxA, int farLineIdxB, double bestDistA, double bestDistB, int secondBestIdxA, int secondBestIdxB, double secondBestDistA, double secondBestDistB)> bendInfos,
@@ -825,19 +869,32 @@ namespace FlatPatternHighlight
             if (side.Count == 0) return 0;
             int count = 0;
 
-            // For the first bend in the chain, create a dimension from it
-            // to the nearest true boundary perimeter edge.
+            // Para a 1ª dobra da cadeia, criar uma cota dela até a curva de
+            // boundary verdadeira. A seleção abaixo é UNIFICADA para todos os bends:
+            // usa a curva paralela mais próxima CORRIGIDA (cross-side) e aplica o
+            // skip de cutout antes de escolher.
             var first = bendInfos[side[0].idx];
             bool flipped = side[0].flipped;
-            // Unify boundary selection for all bends: use the NEAREST corrected
-            // parallel perimeter edge (cross-side), with secondBest skip for cutouts.
+
+            // --- Skip de cutout (heurística do ratio 0.3) ---
+            // Se a curva mais próxima for MUITO mais perto que a 2ª (ratio < 0.3),
+            // ela é quase sempre um recorte fino (cutout/relief) grudado na dobra,
+            // e não a borda externa real. Nesse caso trocamos para a 2ª mais próxima.
+            // O threshold 0.3 vem de observação empírica: cutouts grudados ficam a
+            // <30% da distância da borda real.
             int candA = first.bestIdxA; double distA = first.bestDistA;
             if (first.secondBestIdxA >= 0 && first.bestDistA / first.secondBestDistA < 0.3)
                 { candA = first.secondBestIdxA; distA = first.secondBestDistA; }
             int candB = first.bestIdxB; double distB = first.bestDistB;
             if (first.secondBestIdxB >= 0 && first.bestDistB / first.secondBestDistB < 0.3)
                 { candB = first.secondBestIdxB; distB = first.secondBestDistB; }
-            // Pick nearest corrected candidate, preferring Line over Arc.
+
+            // --- Seleção final do boundary ---
+            // Entre os dois lados (A=nml+, B=nml-) escolhe o mais próximo após a
+            // correção de cutout, preferindo Line sobre Arc. A preferência por Line
+            // existe porque a cota PMI perpendicular (MeasurementMethod.Perpendicular)
+            // exige uma Line como 1ª referência; Arcs (fillets de canto) causam o
+            // erro 1175009 e disparam o fallback de indicator-line vermelha abaixo.
             int boundaryIdx = -1;
             bool lineA = candA >= 0 && perimData[candA].curve is Line;
             bool lineB = candB >= 0 && perimData[candB].curve is Line;
@@ -852,7 +909,10 @@ namespace FlatPatternHighlight
 
             if (boundaryIdx < 0)
             {
-                // Fallback: use the nearest perimeter edge on this side (regardless of parallelism).
+                // --- Fallback final: curva mais próxima sem filtro de paralelismo ---
+                // Quando nenhum candidato paralelo sobreviveu, usa o nearIdx do lado
+                // correto. O lado depende de isLowSide e se a dobra está "flipped"
+                // (direção invertida em relação à referência do grupo).
                 int fallbackIdx = isLowSide
                     ? (flipped ? first.nearIdxA : first.nearIdxB)
                     : (flipped ? first.nearIdxB : first.nearIdxA);
@@ -869,12 +929,16 @@ namespace FlatPatternHighlight
             if (boundaryIdx >= 0)
             {
                 var seg = perimData[boundaryIdx];
+                // Projeta o midpoint da dobra sobre o segmento de boundary para obter
+                // o ponto de pick exato sobre a curva (necessário p/ associatividade).
                 Point3d boundaryPoint = ProjectPointOnSegment(first.pt, seg.start, seg.end);
                 if (!(seg.curve is Line))
                 {
-                    // PmiRapidDimensionBuilder.Perpendicular requires a Line as first reference.
-                    // Arcs (corner fillets etc.) cause error 1175009 and the point-fallback
-                    // would produce a wrong value. Use a red indicator line instead.
+                    // --- Boundary é Arc: indicator-line vermelha em vez de cota ---
+                    // PmiRapidDimensionBuilder com MeasurementMethod.Perpendicular exige
+                    // uma Line como 1ª referência. Arcs (fillet de canto) causam o erro
+                    // NX 1175009 e o point-fallback daria um valor errado. Em vez disso,
+                    // desenhamos uma linha vermelha (cor 36) indicando a distância.
                     lw.WriteLine($"  [Chain] Boundary for Bend Tag={first.bend.Tag} is {seg.curve.GetType().Name} (not Line) - indicator line only");
                     try
                     {
@@ -897,7 +961,8 @@ namespace FlatPatternHighlight
                 }
             }
 
-            // Chain dimensions between consecutive bends.
+            // --- Cotas entre dobras consecutivas da cadeia ---
+            // (sem boundary: midpoint→midpoint das dobras vizinhas)
             for (int k = 1; k < side.Count; k++)
             {
                 var prev = bendInfos[side[k - 1].idx];
@@ -928,11 +993,16 @@ namespace FlatPatternHighlight
         }
 
         /// <summary>
-        /// Create a PMI perpendicular dimension using PmiRapidDimensionBuilder with
-        /// MeasurementMethod.Perpendicular. References actual Curve objects so NX computes
-        /// the true geometric perpendicular distance - works correctly for horizontal,
-        /// vertical, and diagonal bends with no Y-correction needed.
-        /// Falls back to a red indicator line when the PMI/GD&T license is unavailable.
+        /// Cria uma cota PMI perpendicular usando PmiRapidDimensionBuilder com
+        /// MeasurementMethod.Perpendicular. Referencia objetos Curve reais, então o NX
+        /// calcula a distância perpendicular geométrica verdadeira — funciona para dobras
+        /// horizontais, verticais e diagonais sem correção de Y.
+        ///
+        /// Cascata de fallback (cada estágio é mais tolerante a falhas):
+        ///   1. Cota PMI perpendicular (referenciando 2 Curves) — caminho ideal.
+        ///   2. Se ErrorCode 948802 (sem licença PMI/GD&amp;T) → indicator-line vermelha.
+        ///   3. Se outro erro do builder → point-fallback (cota horizontal/vertical
+        ///      entre 2 Points auxiliares blanked) — ver CreatePmiPointFallbackDimension.
         /// </summary>
         private static bool CreatePmiRapidDimension(Part workPart,
             Curve curveA, Point3d pickA,
@@ -1004,6 +1074,9 @@ namespace FlatPatternHighlight
             }
             catch (NXException nex) when (nex.ErrorCode == 948802)
             {
+                // --- Sem licença PMI/GD&T (erro 948802) ---
+                // Desfaz o builder e desenha uma indicator-line vermelha (cor 36) entre
+                // os dois pontos. Não há cota, mas a distância fica visível/logada.
                 try { theSession.UndoToMark(undoMark, null); } catch { }
                 try { theSession.DeleteUndoMark(undoMark, null); } catch { }
 
@@ -1026,6 +1099,8 @@ namespace FlatPatternHighlight
             }
             catch (NXException nex)
             {
+                // --- Erro do builder (ex.: referência inválida, geometria degenerada) ---
+                // Desfaz e tenta o point-fallback (cota entre 2 Points auxiliares).
                 try { theSession.UndoToMark(undoMark, null); } catch { }
                 try { theSession.DeleteUndoMark(undoMark, null); } catch { }
                 try { lw.WriteLine($"  [PMI] Rapid builder failed, trying point fallback. ErrorCode={nex.ErrorCode}  {nex.Message}"); } catch { }
@@ -1033,6 +1108,8 @@ namespace FlatPatternHighlight
             }
             catch (Exception ex)
             {
+                // --- Erro não-NX (ex.: NullReference) ---
+                // Mesma estratégia: desfaz e tenta o point-fallback.
                 try { theSession.UndoToMark(undoMark, null); } catch { }
                 try { theSession.DeleteUndoMark(undoMark, null); } catch { }
                 try { lw.WriteLine($"  [PMI] Rapid builder failed, trying point fallback. {ex.GetType().Name}: {ex.Message}"); } catch { }
@@ -1040,6 +1117,13 @@ namespace FlatPatternHighlight
             }
         }
 
+        /// <summary>
+        /// Fallback de cota PMI quando o PmiRapidDimensionBuilder falha: cria dois Points
+        /// auxiliares (blanked) e uma cota horizontal/vertical entre eles. Não é
+        /// perpendicular como o caminho ideal, mas produz um valor dimensionável.
+        /// A direção (horizontal vs vertical) é escolhida pelo eixo de maior variação
+        /// entre os pontos, considerando a normal do plano do flat pattern.
+        /// </summary>
         private static bool CreatePmiPointFallbackDimension(
             Part workPart,
             Point3d pointA,
