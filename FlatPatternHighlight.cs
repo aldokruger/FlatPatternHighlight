@@ -420,7 +420,8 @@ namespace FlatPatternHighlight
             var bendInfos = new List<(int bi, Curve bend, Point3d pt, Point3d bs, Point3d be, Vector3d dir, Vector3d nml,
                 int bestIdxA, int bestIdxB, int farIdxA, int farIdxB, int nearIdxA, int nearIdxB,
                 int bestLineIdxA, int bestLineIdxB, int farLineIdxA, int farLineIdxB,
-                double bestDistA, double bestDistB)>();
+                double bestDistA, double bestDistB,
+                int secondBestIdxA, int secondBestIdxB, double secondBestDistA, double secondBestDistB)>();
 
             for (int bi = 0; bi < bendLines.Count; bi++)
             {
@@ -462,6 +463,8 @@ namespace FlatPatternHighlight
 
                 double bestDistA = double.MaxValue, bestDistB = double.MaxValue;
                 int bestIdxA = -1, bestIdxB = -1;
+                double secondBestDistA = double.MaxValue, secondBestDistB = double.MaxValue;
+                int secondBestIdxA = -1, secondBestIdxB = -1;
                 double farDistA = -1, farDistB = -1;
                 int farIdxA = -1, farIdxB = -1;
                 double longestLenA = -1, longestLenB = -1;
@@ -515,7 +518,13 @@ namespace FlatPatternHighlight
 
                     if (proj > 0)
                     {
-                        if (dist < bestDistA) { bestDistA = dist; bestIdxA = pi; }
+                        if (dist < bestDistA)
+                        {
+                            secondBestDistA = bestDistA; secondBestIdxA = bestIdxA;
+                            bestDistA = dist; bestIdxA = pi;
+                        }
+                        else if (dist < secondBestDistA)
+                            { secondBestDistA = dist; secondBestIdxA = pi; }
                         if (dist > farDistA) { farDistA = dist; farIdxA = pi; }
                         if (plen > longestLenA) { longestLenA = plen; longestIdxA = pi; }
                         if (dist < bestLineDistA && perimData[pi].curve is Line) { bestLineDistA = dist; bestLineIdxA = pi; }
@@ -523,7 +532,13 @@ namespace FlatPatternHighlight
                     }
                     else if (proj < 0)
                     {
-                        if (dist < bestDistB) { bestDistB = dist; bestIdxB = pi; }
+                        if (dist < bestDistB)
+                        {
+                            secondBestDistB = bestDistB; secondBestIdxB = bestIdxB;
+                            bestDistB = dist; bestIdxB = pi;
+                        }
+                        else if (dist < secondBestDistB)
+                            { secondBestDistB = dist; secondBestIdxB = pi; }
                         if (dist > farDistB) { farDistB = dist; farIdxB = pi; }
                         if (plen > longestLenB) { longestLenB = plen; longestIdxB = pi; }
                         if (dist < bestLineDistB && perimData[pi].curve is Line) { bestLineDistB = dist; bestLineIdxB = pi; }
@@ -577,7 +592,7 @@ namespace FlatPatternHighlight
                 if (farIdxB < 0) farIdxB = nearIdxB;
 
                 Point3d bendPoint = new Point3d((bs.X + be.X) / 2, (bs.Y + be.Y) / 2, (bs.Z + be.Z) / 2);
-                bendInfos.Add((bi, bend, bendPoint, bs, be, bdir, nml, bestIdxA, bestIdxB, farIdxA, farIdxB, nearIdxA, nearIdxB, bestLineIdxA, bestLineIdxB, farLineIdxA, farLineIdxB, bestDistA, bestDistB));
+                bendInfos.Add((bi, bend, bendPoint, bs, be, bdir, nml, bestIdxA, bestIdxB, farIdxA, farIdxB, nearIdxA, nearIdxB, bestLineIdxA, bestLineIdxB, farLineIdxA, farLineIdxB, bestDistA, bestDistB, secondBestIdxA, secondBestIdxB, secondBestDistA, secondBestDistB));
             }
 
             // Create chain PMI dimensions (boundary → nearest bend → next bend → ...).
@@ -620,7 +635,7 @@ namespace FlatPatternHighlight
         /// are dimensioned independently.
         /// </summary>
         private static int CreateChainDimensions(Part workPart,
-            List<(int bi, Curve bend, Point3d pt, Point3d bs, Point3d be, Vector3d dir, Vector3d nml, int bestIdxA, int bestIdxB, int farIdxA, int farIdxB, int nearIdxA, int nearIdxB, int bestLineIdxA, int bestLineIdxB, int farLineIdxA, int farLineIdxB, double bestDistA, double bestDistB)> bendInfos,
+            List<(int bi, Curve bend, Point3d pt, Point3d bs, Point3d be, Vector3d dir, Vector3d nml, int bestIdxA, int bestIdxB, int farIdxA, int farIdxB, int nearIdxA, int nearIdxB, int bestLineIdxA, int bestLineIdxB, int farLineIdxA, int farLineIdxB, double bestDistA, double bestDistB, int secondBestIdxA, int secondBestIdxB, double secondBestDistA, double secondBestDistB)> bendInfos,
             List<(Point3d start, Point3d end, Vector3d dir, double len, Curve curve)> perimData,
             List<Curve> outerPerim,
             double bboxMinU, double bboxMinV, double bboxMaxU, double bboxMaxV,
@@ -669,7 +684,7 @@ namespace FlatPatternHighlight
         /// After initial assignment, overlapping lanes are consolidated greedily.
         /// </summary>
         private static List<List<int>> ClusterByRangeOverlap(
-            List<(int bi, Curve bend, Point3d pt, Point3d bs, Point3d be, Vector3d dir, Vector3d nml, int bestIdxA, int bestIdxB, int farIdxA, int farIdxB, int nearIdxA, int nearIdxB, int bestLineIdxA, int bestLineIdxB, int farLineIdxA, int farLineIdxB, double bestDistA, double bestDistB)> bendInfos,
+            List<(int bi, Curve bend, Point3d pt, Point3d bs, Point3d be, Vector3d dir, Vector3d nml, int bestIdxA, int bestIdxB, int farIdxA, int farIdxB, int nearIdxA, int nearIdxB, int bestLineIdxA, int bestLineIdxB, int farLineIdxA, int farLineIdxB, double bestDistA, double bestDistB, int secondBestIdxA, int secondBestIdxB, double secondBestDistA, double secondBestDistB)> bendInfos,
             List<int> groupIdx, int uAxis, int vAxis)
         {
             Vector3d refDir = bendInfos[groupIdx[0]].dir;
@@ -745,7 +760,7 @@ namespace FlatPatternHighlight
         /// → next bend → etc. on each side.
         /// </summary>
         private static int CreateChainForGroup(Part workPart,
-            List<(int bi, Curve bend, Point3d pt, Point3d bs, Point3d be, Vector3d dir, Vector3d nml, int bestIdxA, int bestIdxB, int farIdxA, int farIdxB, int nearIdxA, int nearIdxB, int bestLineIdxA, int bestLineIdxB, int farLineIdxA, int farLineIdxB, double bestDistA, double bestDistB)> bendInfos,
+            List<(int bi, Curve bend, Point3d pt, Point3d bs, Point3d be, Vector3d dir, Vector3d nml, int bestIdxA, int bestIdxB, int farIdxA, int farIdxB, int nearIdxA, int nearIdxB, int bestLineIdxA, int bestLineIdxB, int farLineIdxA, int farLineIdxB, double bestDistA, double bestDistB, int secondBestIdxA, int secondBestIdxB, double secondBestDistA, double secondBestDistB)> bendInfos,
             List<int> groupIdx,
             List<(Point3d start, Point3d end, Vector3d dir, double len, Curve curve)> perimData,
             List<Curve> outerPerim,
@@ -799,7 +814,7 @@ namespace FlatPatternHighlight
         /// consecutive bends in offset order.
         /// </summary>
         private static int CreateChainSide(Part workPart,
-            List<(int bi, Curve bend, Point3d pt, Point3d bs, Point3d be, Vector3d dir, Vector3d nml, int bestIdxA, int bestIdxB, int farIdxA, int farIdxB, int nearIdxA, int nearIdxB, int bestLineIdxA, int bestLineIdxB, int farLineIdxA, int farLineIdxB, double bestDistA, double bestDistB)> bendInfos,
+            List<(int bi, Curve bend, Point3d pt, Point3d bs, Point3d be, Vector3d dir, Vector3d nml, int bestIdxA, int bestIdxB, int farIdxA, int farIdxB, int nearIdxA, int nearIdxB, int bestLineIdxA, int bestLineIdxB, int farLineIdxA, int farLineIdxB, double bestDistA, double bestDistB, int secondBestIdxA, int secondBestIdxB, double secondBestDistA, double secondBestDistB)> bendInfos,
             List<(int idx, double offset, bool flipped)> side,
             List<(Point3d start, Point3d end, Vector3d dir, double len, Curve curve)> perimData,
             bool isLowSide, int normalAxis,
@@ -823,35 +838,43 @@ namespace FlatPatternHighlight
             int boundaryIdx;
             if (isDiagonalBend)
             {
-                // Use the NEAREST parallel perimeter edge (the true flange boundary).
+                // Use the NEAREST parallel perimeter edge that is a true boundary.
+                // If the nearest edge is suspiciously close (bestDist / secondBestDist < 0.3),
+                // it is likely a cutout/notch edge — use secondBest instead.
                 // Search for a parallel Line across both sides to avoid Arcs.
+                int rawA = first.bestIdxA, rawB = first.bestIdxB;
+                if (first.secondBestIdxA >= 0 && first.bestDistA / first.secondBestDistA < 0.3)
+                    rawA = first.secondBestIdxA;
+                if (first.secondBestIdxB >= 0 && first.bestDistB / first.secondBestDistB < 0.3)
+                    rawB = first.secondBestIdxB;
                 int rawIdx;
                 int lineIdx;
                 if (first.bestLineIdxA >= 0 && first.bestLineIdxB >= 0)
                 {
-                    // Both sides have a parallel Line — pick the nearer one (by bestDist).
-                    if (first.bestDistA <= first.bestDistB)
-                        { rawIdx = first.bestIdxA; lineIdx = first.bestLineIdxA; }
+                    // Both sides have a parallel Line — pick the nearer one.
+                    double distA = rawA >= 0 ? Math.Abs(first.bestDistA) : double.MaxValue;
+                    double distB = rawB >= 0 ? Math.Abs(first.bestDistB) : double.MaxValue;
+                    if (distA <= distB)
+                        { rawIdx = rawA; lineIdx = first.bestLineIdxA; }
                     else
-                        { rawIdx = first.bestIdxB; lineIdx = first.bestLineIdxB; }
+                        { rawIdx = rawB; lineIdx = first.bestLineIdxB; }
                 }
                 else if (first.bestLineIdxA >= 0)
                 {
-                    rawIdx = first.bestIdxA;
+                    rawIdx = rawA;
                     lineIdx = first.bestLineIdxA;
                 }
                 else if (first.bestLineIdxB >= 0)
                 {
-                    rawIdx = first.bestIdxB;
+                    rawIdx = rawB;
                     lineIdx = first.bestLineIdxB;
                 }
                 else
                 {
-                    // No parallel Line on either side — use nearest parallel (any type).
-                    if (first.bestDistA <= first.bestDistB)
-                        rawIdx = first.bestIdxA;
-                    else
-                        rawIdx = first.bestIdxB;
+                    // No parallel Line on either side — use nearest (with secondBest correction).
+                    double distA = rawA >= 0 ? Math.Abs(first.bestDistA) : double.MaxValue;
+                    double distB = rawB >= 0 ? Math.Abs(first.bestDistB) : double.MaxValue;
+                    rawIdx = distA <= distB ? rawA : rawB;
                     lineIdx = -1;
                 }
                 boundaryIdx = lineIdx >= 0 ? lineIdx : rawIdx;
