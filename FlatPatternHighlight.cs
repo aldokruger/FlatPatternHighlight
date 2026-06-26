@@ -817,16 +817,34 @@ namespace FlatPatternHighlight
                 // The isLowSide heuristic can select the wrong side when the bend is near
                 // one edge — the nearest parallel perimeter gives the correct flange width.
                 int rawIdx;
-                if (first.bestDistA <= first.bestDistB)
-                    rawIdx = first.bestIdxA;
-                else
-                    rawIdx = first.bestIdxB;
-                // Prefer parallel Line over Arc.
                 int lineIdx;
-                if (first.bestDistA <= first.bestDistB)
+                if (first.bestLineIdxA >= 0 && first.bestLineIdxB >= 0)
+                {
+                    // Both sides have a parallel Line — pick the nearer one.
+                    if (first.bestDistA <= first.bestDistB)
+                        { rawIdx = first.bestIdxA; lineIdx = first.bestLineIdxA; }
+                    else
+                        { rawIdx = first.bestIdxB; lineIdx = first.bestLineIdxB; }
+                }
+                else if (first.bestLineIdxA >= 0)
+                {
+                    rawIdx = first.bestIdxA;
                     lineIdx = first.bestLineIdxA;
-                else
+                }
+                else if (first.bestLineIdxB >= 0)
+                {
+                    rawIdx = first.bestIdxB;
                     lineIdx = first.bestLineIdxB;
+                }
+                else
+                {
+                    // No parallel Line on either side — use nearest parallel (any type).
+                    if (first.bestDistA <= first.bestDistB)
+                        rawIdx = first.bestIdxA;
+                    else
+                        rawIdx = first.bestIdxB;
+                    lineIdx = -1;
+                }
                 boundaryIdx = lineIdx >= 0 ? lineIdx : rawIdx;
             }
             else
