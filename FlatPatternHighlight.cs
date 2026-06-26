@@ -778,31 +778,7 @@ namespace FlatPatternHighlight
             count += CreateChainSide(workPart, bendInfos, highSide, perimData, isLowSide: false, normalAxis,
                 bboxMinU, bboxMinV, bboxMaxU, bboxMaxV, lw);
 
-            // If a lane spans both halves of the bounding box, each side builds its own
-            // chain from the boundary toward the center. Add one bridge dimension between
-            // the innermost bends so the central gap is not left un-dimensioned.
-            // Bridge dimension: connects innermost bends from each side.
-            // Skip when there's exactly 1 bend per side — the bridge would just be
-            // the sum of the two boundary-to-bend dimensions, which is redundant.
-            if (lowSide.Count > 0 && highSide.Count > 0 &&
-                !(lowSide.Count == 1 && highSide.Count == 1))
-            {
-                var lowInner = bendInfos[lowSide[lowSide.Count - 1].idx];
-                var highInner = bendInfos[highSide[highSide.Count - 1].idx];
 
-                if (lowInner.bi != highInner.bi)
-                {
-                    Point3d origin = CreateChainOrigin(
-                        lowInner.pt,
-                        highInner.pt,
-                        Math.Max(lowSide.Count, highSide.Count),
-                        bboxMinU, bboxMinV, bboxMaxU, bboxMaxV,
-                        normalAxis);
-
-                    if (CreatePmiRapidDimension(workPart, lowInner.bend, lowInner.pt, highInner.bend, highInner.pt, origin, normalAxis, lw))
-                        count++;
-                }
-            }
 
             return count;
         }
