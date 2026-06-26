@@ -10,3 +10,6 @@ src_sample/
 *.pdf
 journal.cs
 docs/
+.DS_Store
+._*
+.pi/
