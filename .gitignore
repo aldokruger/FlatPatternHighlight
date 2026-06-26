@@ -8,3 +8,5 @@ NXSigningResource.res
 src_sample/
 *.prt
 *.pdf
+journal.cs
+docs/

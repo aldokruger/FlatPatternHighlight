@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <!-- NX 2512: .NET Framework 4.8 (recomendado) ou net8.0-windows (experimental) -->
     <TargetFramework>net48</TargetFramework>
@@ -10,7 +10,7 @@
     <RootNamespace>FlatPatternHighlight</RootNamespace>
   </PropertyGroup>
 
-  <!-- Ajuste o caminho para sua instalação do NX 2512 -->
+  <!-- Ajuste o caminho para sua instalaÃ§Ã£o do NX 2512 -->
   <ItemGroup>
     <Reference Include="NXOpen">
       <HintPath>D:\\NX2512\NXBIN\managed\NXOpen.dll</HintPath>
@@ -34,8 +34,10 @@
   <!-- src_sample contem exemplos de referencia, nao faz parte do build do plugin -->
   <ItemGroup>
     <Compile Remove="src_sample\**\*.cs" />
+    <Compile Remove="journal.cs" />
   </ItemGroup>
 </Project>
+
 
 
 

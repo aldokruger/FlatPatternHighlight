@@ -118,26 +118,24 @@ namespace FlatPatternHighlight
                 if (bendLines != null && bendLines.Count > 0 && outerPerim != null && outerPerim.Count > 0)
                     AnalyzeBendToPerimeter(bendLines, outerPerim, lw, workPart);
 
+                // Highlights are transient analysis aids only; remove them before exit.
+                UnhighlightObjects(outerPerim);
+                UnhighlightObjects(bendLines);
+
                 lw.WriteLine("=== End of Diagnostic Log ===");
                 return 0;
             }
             catch (NXException ex)
             {
                 if (theUI != null)
-                    theUI.NXMessageBox.Show(
-                        "Flat Pattern Highlight - Error",
-                        NXMessageBox.DialogType.Error,
-                        $"NX Error: {ex.Message}");
-                return ex.ErrorCode != 0 ? ex.ErrorCode : 1;
+                    try { theUI.NXMessageBox.Show("Flat Pattern Highlight - Error", NXMessageBox.DialogType.Error, $"NX Error: {ex.Message}"); } catch { }
+                return 0;
             }
             catch (Exception ex)
             {
                 if (theUI != null)
-                    theUI.NXMessageBox.Show(
-                        "Flat Pattern Highlight - Error",
-                        NXMessageBox.DialogType.Error,
-                        $"Error: {ex.Message}");
-                return 1;
+                    try { theUI.NXMessageBox.Show("Flat Pattern Highlight - Error", NXMessageBox.DialogType.Error, $"Error: {ex.Message}"); } catch { }
+                return 0;
             }
         }
 
@@ -393,7 +391,7 @@ namespace FlatPatternHighlight
             double bboxMinU = double.MaxValue, bboxMinV = double.MaxValue;
             double bboxMaxU = double.MinValue, bboxMaxV = double.MinValue;
 
-            var perimData = new List<(Point3d start, Point3d end, Vector3d dir, double len)>();
+            var perimData = new List<(Point3d start, Point3d end, Vector3d dir, double len, Curve curve)>();
             int nonLineArcCount = 0;
             foreach (var c in outerPerim)
             {
@@ -402,7 +400,7 @@ namespace FlatPatternHighlight
                 double du = GetU(e) - GetU(s), dv = GetV(e) - GetV(s);
                 double len = Math.Sqrt(du * du + dv * dv);
                 Vector3d d = len > 1e-6 ? new Vector3d(du / len, dv / len, 0) : new Vector3d(0, 0, 0);
-                perimData.Add((s, e, d, len));
+                perimData.Add((s, e, d, len, c));
                 double su = GetU(s), sv = GetV(s), eu = GetU(e), ev = GetV(e);
                 if (su < bboxMinU) bboxMinU = su; if (su > bboxMaxU) bboxMaxU = su;
                 if (sv < bboxMinV) bboxMinV = sv; if (sv > bboxMaxV) bboxMaxV = sv;
@@ -439,6 +437,27 @@ namespace FlatPatternHighlight
                 double mu = (GetU(bs) + GetU(be)) / 2;
                 double mv = (GetV(bs) + GetV(be)) / 2;
 
+                // Skip bend lines whose 3-D midpoint lies on (or within 0.5 mm of) the outer
+                // perimeter. Some NX flat-pattern configurations return perimeter edges through
+                // GetBendUpCenterLines / GetBendDownCenterLines as artefacts.
+                {
+                    Point3d bmid3D = new Point3d((bs.X + be.X) / 2.0, (bs.Y + be.Y) / 2.0, (bs.Z + be.Z) / 2.0);
+                    bool onPerim = false;
+                    foreach (var seg in perimData)
+                    {
+                        Point3d cl = ProjectPointOnSegment(bmid3D, seg.start, seg.end);
+                        double d2 = (bmid3D.X - cl.X) * (bmid3D.X - cl.X)
+                                  + (bmid3D.Y - cl.Y) * (bmid3D.Y - cl.Y)
+                                  + (bmid3D.Z - cl.Z) * (bmid3D.Z - cl.Z);
+                        if (d2 < 0.25) { onPerim = true; break; } // 0.5 mm threshold
+                    }
+                    if (onPerim)
+                    {
+                        lw.WriteLine($"  Bend[{bi}] Tag={bend.Tag}  skipped - midpoint on outer perimeter (artefact)");
+                        continue;
+                    }
+                }
+
                 double bestDistA = double.MaxValue, bestDistB = double.MaxValue;
                 int bestIdxA = -1, bestIdxB = -1;
                 double farDistA = -1, farDistB = -1;
@@ -449,7 +468,7 @@ namespace FlatPatternHighlight
                 // Scan all perimeter curves for parallel segments on each side.
                 for (int pi = 0; pi < perimData.Count; pi++)
                 {
-                    var (ps, pe, pdir, plen) = perimData[pi];
+                    var (ps, pe, pdir, plen, _) = perimData[pi];
 
                     // Filter: only curves that are approximately parallel (dot > 0.95).
                     double dot = pdir.X * bdir.X + pdir.Y * bdir.Y;
@@ -556,7 +575,7 @@ namespace FlatPatternHighlight
         /// </summary>
         private static int CreateChainDimensions(Part workPart,
             List<(int bi, Curve bend, Point3d pt, Point3d bs, Point3d be, Vector3d dir, Vector3d nml, int bestIdxA, int bestIdxB, int farIdxA, int farIdxB)> bendInfos,
-            List<(Point3d start, Point3d end, Vector3d dir, double len)> perimData,
+            List<(Point3d start, Point3d end, Vector3d dir, double len, Curve curve)> perimData,
             List<Curve> outerPerim,
             double bboxMinU, double bboxMinV, double bboxMaxU, double bboxMaxV,
             int uAxis, int vAxis, int normalAxis,
@@ -682,7 +701,7 @@ namespace FlatPatternHighlight
         private static int CreateChainForGroup(Part workPart,
             List<(int bi, Curve bend, Point3d pt, Point3d bs, Point3d be, Vector3d dir, Vector3d nml, int bestIdxA, int bestIdxB, int farIdxA, int farIdxB)> bendInfos,
             List<int> groupIdx,
-            List<(Point3d start, Point3d end, Vector3d dir, double len)> perimData,
+            List<(Point3d start, Point3d end, Vector3d dir, double len, Curve curve)> perimData,
             List<Curve> outerPerim,
             double bboxMinU, double bboxMinV, double bboxMaxU, double bboxMaxV,
             int uAxis, int vAxis, int normalAxis,
@@ -718,8 +737,33 @@ namespace FlatPatternHighlight
             var highSide = entries.Where(e => (e.offset - bboxLow) > (bboxHigh - e.offset)).OrderByDescending(e => e.offset).ToList();
 
             int count = 0;
-            count += CreateChainSide(workPart, bendInfos, lowSide, perimData, isLowSide: true, normalAxis, lw);
-            count += CreateChainSide(workPart, bendInfos, highSide, perimData, isLowSide: false, normalAxis, lw);
+            count += CreateChainSide(workPart, bendInfos, lowSide, perimData, isLowSide: true, normalAxis,
+                bboxMinU, bboxMinV, bboxMaxU, bboxMaxV, lw);
+            count += CreateChainSide(workPart, bendInfos, highSide, perimData, isLowSide: false, normalAxis,
+                bboxMinU, bboxMinV, bboxMaxU, bboxMaxV, lw);
+
+            // If a lane spans both halves of the bounding box, each side builds its own
+            // chain from the boundary toward the center. Add one bridge dimension between
+            // the innermost bends so the central gap is not left un-dimensioned.
+            if (lowSide.Count > 0 && highSide.Count > 0)
+            {
+                var lowInner = bendInfos[lowSide[lowSide.Count - 1].idx];
+                var highInner = bendInfos[highSide[highSide.Count - 1].idx];
+
+                if (lowInner.bi != highInner.bi)
+                {
+                    Point3d origin = CreateChainOrigin(
+                        lowInner.pt,
+                        highInner.pt,
+                        Math.Max(lowSide.Count, highSide.Count),
+                        bboxMinU, bboxMinV, bboxMaxU, bboxMaxV,
+                        normalAxis);
+
+                    if (CreatePmiRapidDimension(workPart, lowInner.bend, lowInner.pt, highInner.bend, highInner.pt, origin, normalAxis, lw))
+                        count++;
+                }
+            }
+
             return count;
         }
 
@@ -731,26 +775,64 @@ namespace FlatPatternHighlight
         private static int CreateChainSide(Part workPart,
             List<(int bi, Curve bend, Point3d pt, Point3d bs, Point3d be, Vector3d dir, Vector3d nml, int bestIdxA, int bestIdxB, int farIdxA, int farIdxB)> bendInfos,
             List<(int idx, double offset, bool flipped)> side,
-            List<(Point3d start, Point3d end, Vector3d dir, double len)> perimData,
-            bool isLowSide, int normalAxis, LogFile lw)
+            List<(Point3d start, Point3d end, Vector3d dir, double len, Curve curve)> perimData,
+            bool isLowSide, int normalAxis,
+            double bboxMinU, double bboxMinV, double bboxMaxU, double bboxMaxV,
+            LogFile lw)
         {
             if (side.Count == 0) return 0;
             int count = 0;
 
             // For the first bend in the chain, create a dimension from it
-            // to the farthest boundary perimeter curve on that side.
+            // to the nearest boundary perimeter curve on that side.
+            //
+            // Diagonal bends: "farthest" parallel perimeter can be the far bbox corner,
+            // 3-4x the actual flange width. The Y-correction then pushes the reference
+            // point outside the bbox - nonsensical dimension. Use NEAREST (bestIdx) for
+            // diagonal bends so the corrected reference stays inside the part and the
+            // value equals the true perpendicular flange width.
             var first = bendInfos[side[0].idx];
             bool flipped = side[0].flipped;
-            int farIdxBoundary = isLowSide
-                ? (flipped ? first.farIdxA : first.farIdxB)
-                : (flipped ? first.farIdxB : first.farIdxA);
+            bool isDiagonalBend = Math.Abs(first.dir.X) > 0.2 && Math.Abs(first.dir.Y) > 0.2;
+            int boundaryIdx;
+            if (isDiagonalBend)
+                boundaryIdx = isLowSide
+                    ? (flipped ? first.bestIdxA : first.bestIdxB)
+                    : (flipped ? first.bestIdxB : first.bestIdxA);
+            else
+                boundaryIdx = isLowSide
+                    ? (flipped ? first.farIdxA : first.farIdxB)
+                    : (flipped ? first.farIdxB : first.farIdxA);
 
-            if (farIdxBoundary >= 0)
+            if (boundaryIdx >= 0)
             {
-                var seg = perimData[farIdxBoundary];
+                var seg = perimData[boundaryIdx];
                 Point3d boundaryPoint = ProjectPointOnSegment(first.pt, seg.start, seg.end);
-                if (CreatePmiPointDimension(workPart, boundaryPoint, first.pt, first.dir, normalAxis, lw))
-                    count++;
+                if (!(seg.curve is Line))
+                {
+                    // PmiRapidDimensionBuilder.Perpendicular requires a Line as first reference.
+                    // Arcs (corner fillets etc.) cause error 1175009 and the point-fallback
+                    // would produce a wrong value. Use a red indicator line instead.
+                    lw.WriteLine($"  [Chain] Boundary for Bend Tag={first.bend.Tag} is {seg.curve.GetType().Name} (not Line) - indicator line only");
+                    try
+                    {
+                        Line indicator = workPart.Curves.CreateLine(boundaryPoint, first.pt);
+                        indicator.Color = 36;
+                        indicator.SetUserAttribute("FlatPatternHighlight", 0, "true", NXOpen.Update.Option.Later);
+                    }
+                    catch (Exception exL) { lw.WriteLine($"  [Chain] Indicator line failed: {exL.Message}"); }
+                }
+                else
+                {
+                    Point3d origin = CreateChainOrigin(
+                        boundaryPoint,
+                        first.pt,
+                        0,
+                        bboxMinU, bboxMinV, bboxMaxU, bboxMaxV,
+                        normalAxis);
+                    if (CreatePmiRapidDimension(workPart, seg.curve, boundaryPoint, first.bend, first.pt, origin, normalAxis, lw))
+                        count++;
+                }
             }
             else
             {
@@ -762,7 +844,13 @@ namespace FlatPatternHighlight
             {
                 var prev = bendInfos[side[k - 1].idx];
                 var curr = bendInfos[side[k].idx];
-                if (CreatePmiPointDimension(workPart, prev.pt, curr.pt, curr.dir, normalAxis, lw))
+                Point3d origin = CreateChainOrigin(
+                    prev.pt,
+                    curr.pt,
+                    k,
+                    bboxMinU, bboxMinV, bboxMaxU, bboxMaxV,
+                    normalAxis);
+                if (CreatePmiRapidDimension(workPart, prev.bend, prev.pt, curr.bend, curr.pt, origin, normalAxis, lw))
                     count++;
             }
 
@@ -770,20 +858,140 @@ namespace FlatPatternHighlight
         }
 
         /// <summary>
-        /// Create a single PMI point-to-point dimension in NX.
-        ///
-        /// Uses helper points (blanked, tagged with a user attribute for later cleanup)
-        /// to anchor the dimension associativity. The dimension direction is inferred
-        /// from the bend direction: horizontal bends → vertical dimension, vertical
-        /// bends → horizontal dimension.
-        ///
-        /// The annotation plane is chosen based on the detected flat pattern normal axis.
+        /// Find the flat-pattern modeling view. Used as view context for PMI associativity,
+        /// matching the NX journal recording pattern. Falls back to work view if not found.
         /// </summary>
-        private static bool CreatePmiPointDimension(Part workPart, Point3d pointA, Point3d pointB, Vector3d dir, int normalAxis, LogFile lw)
+        private static NXOpen.ModelingView FindFlatPatternView(Part workPart)
+        {
+            foreach (NXOpen.ModelingView mv in workPart.ModelingViews)
+                if (mv.Name.IndexOf("FLAT", StringComparison.OrdinalIgnoreCase) >= 0)
+                    return mv;
+            return workPart.ModelingViews.WorkView;
+        }
+
+        /// <summary>
+        /// Create a PMI perpendicular dimension using PmiRapidDimensionBuilder with
+        /// MeasurementMethod.Perpendicular. References actual Curve objects so NX computes
+        /// the true geometric perpendicular distance - works correctly for horizontal,
+        /// vertical, and diagonal bends with no Y-correction needed.
+        /// Falls back to a red indicator line when the PMI/GD&T license is unavailable.
+        /// </summary>
+        private static bool CreatePmiRapidDimension(Part workPart,
+            Curve curveA, Point3d pickA,
+            Curve curveB, Point3d midB,
+            Point3d origin,
+            int normalAxis,
+            LogFile lw)
+        {
+            NXOpen.Session theSession = NXOpen.Session.GetSession();
+            NXOpen.Session.UndoMarkId undoMark =
+                theSession.SetUndoMark(NXOpen.Session.MarkVisibility.Invisible, "PMI dim attempt");
+
+            try
+            {
+                NXOpen.ModelingView flatView = FindFlatPatternView(workPart);
+
+                NXOpen.Annotations.PmiRapidDimensionBuilder builder =
+                    workPart.Dimensions.CreatePmiRapidDimensionBuilder(null);
+
+                builder.Measurement.Method =
+                    NXOpen.Annotations.DimensionMeasurementBuilder.MeasurementMethod.Perpendicular;
+
+                builder.Origin.Plane.PlaneMethod =
+                    NXOpen.Annotations.PlaneBuilder.PlaneMethodType.ModelView;
+                builder.Origin.SetInferRelativeToGeometry(false);
+                builder.Origin.Anchor =
+                    NXOpen.Annotations.OriginBuilder.AlignmentPosition.MidCenter;
+
+                builder.FirstAssociativity.SetValue(curveA, flatView, pickA);
+                builder.SecondAssociativity.SetValue(
+                    NXOpen.InferSnapType.SnapType.Mid,
+                    curveB, flatView, midB,
+                    null, null,
+                    new Point3d(0, 0, 0));
+
+                builder.AssociatedObjects.Nxobjects.SetArray(
+                    new NXOpen.NXObject[] { curveB, curveA });
+
+                var assocOrigin = new NXOpen.Annotations.Annotation.AssociativeOriginData();
+                assocOrigin.OriginType              = NXOpen.Annotations.AssociativeOriginType.Drag;
+                assocOrigin.View                    = null;
+                assocOrigin.ViewOfGeometry          = null;
+                assocOrigin.PointOnGeometry         = null;
+                assocOrigin.VertAnnotation          = null;
+                assocOrigin.VertAlignmentPosition   = NXOpen.Annotations.AlignmentPosition.TopLeft;
+                assocOrigin.HorizAnnotation         = null;
+                assocOrigin.HorizAlignmentPosition  = NXOpen.Annotations.AlignmentPosition.TopLeft;
+                assocOrigin.AlignedAnnotation       = null;
+                assocOrigin.DimensionLine           = 0;
+                assocOrigin.AssociatedView          = null;
+                assocOrigin.AssociatedPoint         = null;
+                assocOrigin.OffsetAnnotation        = null;
+                assocOrigin.OffsetAlignmentPosition = NXOpen.Annotations.AlignmentPosition.TopLeft;
+                assocOrigin.XOffsetFactor           = 0.0;
+                assocOrigin.YOffsetFactor           = 0.0;
+                assocOrigin.StackAlignmentPosition  = NXOpen.Annotations.StackAlignmentPosition.Above;
+                builder.Origin.SetAssociativeOrigin(assocOrigin);
+                builder.Origin.Origin.SetValue(null, null, origin);
+                builder.Origin.SetInferRelativeToGeometry(false);
+
+                NXOpen.NXObject dimObj = builder.Commit();
+                theSession.DeleteUndoMark(undoMark, null);
+                builder.Destroy();
+
+                if (dimObj != null)
+                    dimObj.SetUserAttribute("FlatPatternHighlight", 0, "true", NXOpen.Update.Option.Later);
+
+                return dimObj != null;
+            }
+            catch (NXException nex) when (nex.ErrorCode == 948802)
+            {
+                try { theSession.UndoToMark(undoMark, null); } catch { }
+                try { theSession.DeleteUndoMark(undoMark, null); } catch { }
+
+                double dist = Math.Sqrt(
+                    (midB.X - pickA.X) * (midB.X - pickA.X) +
+                    (midB.Y - pickA.Y) * (midB.Y - pickA.Y));
+                lw.WriteLine($"  [PMI] No PMI license (948802) - indicator line, dist={dist:F2} mm");
+
+                try
+                {
+                    Line indicator = workPart.Curves.CreateLine(pickA, midB);
+                    indicator.Color = 36;
+                    indicator.SetUserAttribute("FlatPatternHighlight", 0, "true", NXOpen.Update.Option.Later);
+                }
+                catch (Exception exLine)
+                {
+                    lw.WriteLine($"  [PMI] Indicator line failed: {exLine.Message}");
+                }
+                return false;
+            }
+            catch (NXException nex)
+            {
+                try { theSession.UndoToMark(undoMark, null); } catch { }
+                try { theSession.DeleteUndoMark(undoMark, null); } catch { }
+                try { lw.WriteLine($"  [PMI] Rapid builder failed, trying point fallback. ErrorCode={nex.ErrorCode}  {nex.Message}"); } catch { }
+                return CreatePmiPointFallbackDimension(workPart, pickA, midB, origin, normalAxis, lw);
+            }
+            catch (Exception ex)
+            {
+                try { theSession.UndoToMark(undoMark, null); } catch { }
+                try { theSession.DeleteUndoMark(undoMark, null); } catch { }
+                try { lw.WriteLine($"  [PMI] Rapid builder failed, trying point fallback. {ex.GetType().Name}: {ex.Message}"); } catch { }
+                return CreatePmiPointFallbackDimension(workPart, pickA, midB, origin, normalAxis, lw);
+            }
+        }
+
+        private static bool CreatePmiPointFallbackDimension(
+            Part workPart,
+            Point3d pointA,
+            Point3d pointB,
+            Point3d origin,
+            int normalAxis,
+            LogFile lw)
         {
             try
             {
-                // Create blanked helper points for dimension associativity.
                 Point helperA = workPart.Points.CreatePoint(pointA);
                 helperA.Blank();
                 helperA.SetUserAttribute("FlatPatternHighlightHelper", 0, "true", NXOpen.Update.Option.Later);
@@ -809,45 +1017,109 @@ namespace FlatPatternHighlight
                 dimData.SetAssociativity(2, new NXOpen.Annotations.Associativity[] { assoc2 });
 
                 var pmiData = workPart.Annotations.NewPmiData();
-                // Choose annotation plane based on the flat pattern normal.
-                NXOpen.Annotations.PmiDefaultPlane planeKind;
-                switch (normalAxis)
-                {
-                    case 0: planeKind = NXOpen.Annotations.PmiDefaultPlane.YzOfWcs; break;
-                    case 1: planeKind = NXOpen.Annotations.PmiDefaultPlane.XzOfWcs; break;
-                    default: planeKind = NXOpen.Annotations.PmiDefaultPlane.XyOfWcs; break;
-                }
-                Xform annotationPlane = workPart.Annotations.GetDefaultAnnotationPlane(planeKind);
+                Xform plane = GetAnnotationPlaneForNormalAxis(workPart, normalAxis);
 
-                // Place the dimension origin at the midpoint between the two points.
-                Point3d origin = new Point3d(
-                    (pointA.X + pointB.X) / 2,
-                    (pointA.Y + pointB.Y) / 2,
-                    (pointA.Z + pointB.Z) / 2);
+                double dx = Math.Abs(pointB.X - pointA.X);
+                double dy = Math.Abs(pointB.Y - pointA.Y);
+                double dz = Math.Abs(pointB.Z - pointA.Z);
 
-                // Decide dimension orientation based on the predominant bend direction.
-                bool horizontalBend = Math.Abs(dir.X) >= Math.Abs(dir.Y);
                 NXObject dimObj;
-                if (horizontalBend)
-                    dimObj = workPart.Dimensions.CreatePmiVerticalDimension(dimData, pmiData, annotationPlane, origin);
+                if (normalAxis == 0)
+                {
+                    if (dy >= dz)
+                        dimObj = workPart.Dimensions.CreatePmiHorizontalDimension(dimData, pmiData, plane, origin);
+                    else
+                        dimObj = workPart.Dimensions.CreatePmiVerticalDimension(dimData, pmiData, plane, origin);
+                }
+                else if (normalAxis == 1)
+                {
+                    if (dx >= dz)
+                        dimObj = workPart.Dimensions.CreatePmiHorizontalDimension(dimData, pmiData, plane, origin);
+                    else
+                        dimObj = workPart.Dimensions.CreatePmiVerticalDimension(dimData, pmiData, plane, origin);
+                }
                 else
-                    dimObj = workPart.Dimensions.CreatePmiHorizontalDimension(dimData, pmiData, annotationPlane, origin);
+                {
+                    if (dx >= dy)
+                        dimObj = workPart.Dimensions.CreatePmiHorizontalDimension(dimData, pmiData, plane, origin);
+                    else
+                        dimObj = workPart.Dimensions.CreatePmiVerticalDimension(dimData, pmiData, plane, origin);
+                }
 
-                // Tag the dimension so it can be identified/cleaned later.
                 if (dimObj != null)
                     dimObj.SetUserAttribute("FlatPatternHighlight", 0, "true", NXOpen.Update.Option.Later);
 
                 return dimObj != null;
             }
-            catch (NXException nex)
+            catch (Exception fallbackEx)
             {
-                lw.WriteLine($"  [PMI] NXException: ErrorCode={nex.ErrorCode}  {nex.Message}");
+                try { lw.WriteLine($"  [PMI] Point fallback failed: {fallbackEx.Message}"); } catch { }
                 return false;
             }
-            catch (Exception ex)
+        }
+
+        private static Xform GetAnnotationPlaneForNormalAxis(Part workPart, int normalAxis)
+        {
+            if (normalAxis == 0)
+                return workPart.Annotations.GetDefaultAnnotationPlane(NXOpen.Annotations.PmiDefaultPlane.YzOfWcs);
+            if (normalAxis == 1)
+                return workPart.Annotations.GetDefaultAnnotationPlane(NXOpen.Annotations.PmiDefaultPlane.XzOfWcs);
+            return workPart.Annotations.GetDefaultAnnotationPlane(NXOpen.Annotations.PmiDefaultPlane.XyOfWcs);
+        }
+
+        /// <summary>
+        /// Compute the origin (annotation text location) for a chain dimension.
+        /// Places the text outside the bounding box, stacked vertically/horizontally
+        /// by level (0 = outermost, 1 = next, etc.).
+        /// </summary>
+        private static Point3d CreateChainOrigin(
+            Point3d pointA,
+            Point3d pointB,
+            int level,
+            double bboxMinU,
+            double bboxMinV,
+            double bboxMaxU,
+            double bboxMaxV,
+            int normalAxis)
+        {
+            double bboxExtent = Math.Max(bboxMaxU - bboxMinU, bboxMaxV - bboxMinV);
+            double margin = Math.Max(25.0, bboxExtent * 0.03);
+            double spacing = Math.Max(18.0, bboxExtent * 0.025);
+            double offset = margin + level * spacing;
+
+            // Constant coordinate along the flat pattern normal axis
+            double normalVal = normalAxis == 0 ? pointA.X : normalAxis == 1 ? pointA.Y : pointA.Z;
+
+            // UV axis indices: normalAxis=0 -> U=Y(1),V=Z(2);  normalAxis=1 -> U=X(0),V=Z(2);  normalAxis=2 -> U=X(0),V=Y(1)
+            int uIdx = normalAxis == 0 ? 1 : 0;
+            int vIdx = normalAxis <= 1  ? 2 : 1;
+
+            double uA = AxisCoord(pointA, uIdx), vA = AxisCoord(pointA, vIdx);
+            double uB = AxisCoord(pointB, uIdx), vB = AxisCoord(pointB, vIdx);
+
+            double midU = (uA + uB) / 2.0;
+            double midV = (vA + vB) / 2.0;
+
+            // V-dominant measurement -> text outside the high-U edge (right side).
+            // U-dominant measurement -> text outside the high-V edge (top side).
+            double textU, textV;
+            if (Math.Abs(vB - vA) >= Math.Abs(uB - uA))
             {
-                lw.WriteLine($"  [PMI] {ex.GetType().Name}: {ex.Message}");
-                return false;
+                textU = bboxMaxU + offset;
+                textV = midV;
+            }
+            else
+            {
+                textU = midU;
+                textV = bboxMaxV + offset;
+            }
+
+            // Convert UV + normal value back to XYZ
+            switch (normalAxis)
+            {
+                case 0:  return new Point3d(normalVal, textU, textV);   // U=Y, V=Z
+                case 1:  return new Point3d(textU, normalVal, textV);   // U=X, V=Z
+                default: return new Point3d(textU, textV, normalVal);   // U=X, V=Y
             }
         }
 
@@ -954,8 +1226,15 @@ namespace FlatPatternHighlight
         /// </summary>
         private static FlatPattern FindFlatPattern(Part workPart)
         {
-            foreach (Feature f in workPart.Features)
-                if (f is FlatPattern) return (FlatPattern)f;
+            // Iterating workPart.Features can trigger NX's internal PartCollection.FindObject
+            // when the flat pattern feature resolves its source part (which may not be loaded).
+            // Catch it here so the exception doesn't propagate to Main.
+            try
+            {
+                foreach (Feature f in workPart.Features)
+                    if (f is FlatPattern) return (FlatPattern)f;
+            }
+            catch { }
             return null;
         }
 
@@ -989,6 +1268,16 @@ namespace FlatPatternHighlight
         {
             if (objects.Count == 0) return;
             foreach (var o in objects) o.Highlight();
+        }
+
+        /// <summary>
+        /// Clear transient highlight state from displayable objects after analysis.
+        /// </summary>
+        private static void UnhighlightObjects(IEnumerable<Curve> curves)
+        {
+            if (curves == null) return;
+            foreach (var curve in curves)
+                curve?.Unhighlight();
         }
 
         // =====================================================================

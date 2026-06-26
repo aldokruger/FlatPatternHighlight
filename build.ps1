@@ -68,7 +68,7 @@ Write-Host "  Done" -ForegroundColor Green
 Write-Host "[3/4] Patching .csproj with NX path..." -ForegroundColor Yellow
 $csprojContent = Get-Content $CsprojPath -Raw
 $csprojContent = $csprojContent -replace 'C:\\Program Files\\Siemens\\NX2512', $NxDir.Replace('\', '\\')
-Set-Content $CsprojPath $csprojContent
+Set-Content $CsprojPath $csprojContent -Encoding UTF8
 Write-Host "  HintPath updated to $NxDir" -ForegroundColor Green
 
 Write-Host "[3/4] Building plugin ($Configuration)..." -ForegroundColor Yellow
