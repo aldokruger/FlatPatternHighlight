@@ -798,9 +798,9 @@ namespace FlatPatternHighlight
             var highSide = entries.Where(e => (e.offset - bboxLow) > (bboxHigh - e.offset)).OrderByDescending(e => e.offset).ToList();
 
             int count = 0;
-            count += CreateChainSide(workPart, bendInfos, lowSide, perimData, isLowSide: true, normalAxis,
+            count += CreateChainSide(workPart, bendInfos, lowSide, perimData, outerPerim, isLowSide: true, normalAxis,
                 bboxMinU, bboxMinV, bboxMaxU, bboxMaxV, lw);
-            count += CreateChainSide(workPart, bendInfos, highSide, perimData, isLowSide: false, normalAxis,
+            count += CreateChainSide(workPart, bendInfos, highSide, perimData, outerPerim, isLowSide: false, normalAxis,
                 bboxMinU, bboxMinV, bboxMaxU, bboxMaxV, lw);
 
 
@@ -817,6 +817,7 @@ namespace FlatPatternHighlight
             List<(int bi, Curve bend, Point3d pt, Point3d bs, Point3d be, Vector3d dir, Vector3d nml, int bestIdxA, int bestIdxB, int farIdxA, int farIdxB, int nearIdxA, int nearIdxB, int bestLineIdxA, int bestLineIdxB, int farLineIdxA, int farLineIdxB, double bestDistA, double bestDistB, int secondBestIdxA, int secondBestIdxB, double secondBestDistA, double secondBestDistB)> bendInfos,
             List<(int idx, double offset, bool flipped)> side,
             List<(Point3d start, Point3d end, Vector3d dir, double len, Curve curve)> perimData,
+            List<Curve> outerPerim,
             bool isLowSide, int normalAxis,
             double bboxMinU, double bboxMinV, double bboxMaxU, double bboxMaxV,
             LogFile lw)
@@ -837,6 +838,7 @@ namespace FlatPatternHighlight
             if (first.secondBestIdxB >= 0 && first.bestDistB / first.secondBestDistB < 0.3)
                 { candB = first.secondBestIdxB; distB = first.secondBestDistB; }
             // Pick nearest corrected candidate, preferring Line over Arc.
+            int boundaryIdx = -1;
             bool lineA = candA >= 0 && perimData[candA].curve is Line;
             bool lineB = candB >= 0 && perimData[candB].curve is Line;
             if (lineA && lineB)
@@ -856,7 +858,7 @@ namespace FlatPatternHighlight
                     : (flipped ? first.nearIdxB : first.nearIdxA);
                 if (fallbackIdx >= 0 && perimData[fallbackIdx].curve is Line)
                 {
-                    lw.WriteLine($"  [Chain] Fallback to nearest perimeter for Bend Tag={first.bend.Tag} on {(isLowSide ? "low" : "high")} side. perimTag={outerPerim[fallbackIdx].Tag}");
+                    lw.WriteLine($"  [Chain] Fallback to nearest perimeter for Bend Tag={first.bend.Tag} on {(isLowSide ? "low" : "high")} side. perimTag={perimData[fallbackIdx].curve.Tag}");
                     boundaryIdx = fallbackIdx;
                 }
                 else
