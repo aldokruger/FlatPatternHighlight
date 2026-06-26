@@ -825,79 +825,28 @@ namespace FlatPatternHighlight
             int count = 0;
 
             // For the first bend in the chain, create a dimension from it
-            // to the nearest boundary perimeter curve on that side.
-            //
-            // Diagonal bends: "farthest" parallel perimeter can be the far bbox corner,
-            // 3-4x the actual flange width. The Y-correction then pushes the reference
-            // point outside the bbox - nonsensical dimension. Use NEAREST (bestIdx) for
-            // diagonal bends so the corrected reference stays inside the part and the
-            // value equals the true perpendicular flange width.
+            // to the nearest true boundary perimeter edge.
             var first = bendInfos[side[0].idx];
             bool flipped = side[0].flipped;
-            bool isDiagonalBend = Math.Abs(first.dir.X) > 0.2 && Math.Abs(first.dir.Y) > 0.2;
-            int boundaryIdx;
-            if (isDiagonalBend)
-            {
-                // For diagonal bends, use the side from the chain direction
-                // (isLowSide/flipped). Apply secondBest correction on that side.
-                // If the preferred side has only a cutout (ratio < 0.3 and no secondBest
-                // available), fall back to the other side.
-                int prefIdx, prefSecond;
-                double prefDist, prefSecondDist;
-                if (isLowSide)
-                {
-                    prefIdx = flipped ? first.bestIdxA : first.bestIdxB;
-                    prefDist = flipped ? first.bestDistA : first.bestDistB;
-                    prefSecond = flipped ? first.secondBestIdxA : first.secondBestIdxB;
-                    prefSecondDist = flipped ? first.secondBestDistA : first.secondBestDistB;
-                }
-                else
-                {
-                    prefIdx = flipped ? first.bestIdxB : first.bestIdxA;
-                    prefDist = flipped ? first.bestDistB : first.bestDistA;
-                    prefSecond = flipped ? first.secondBestIdxB : first.secondBestIdxA;
-                    prefSecondDist = flipped ? first.secondBestDistB : first.secondBestDistA;
-                }
-                // If preferred side has a valid non-cutout boundary, use it.
-                bool prefIsCutout = prefSecond >= 0 && prefDist / prefSecondDist < 0.3;
-                if (!prefIsCutout)
-                {
-                    boundaryIdx = prefIdx;  // no correction needed
-                }
-                else
-                {
-                    // Preferred side has a cutout edge — use secondBest if available,
-                    // otherwise fall back to the other side's nearest (corrected).
-                    if (prefSecond >= 0)
-                        boundaryIdx = prefSecond;
-                    else
-                    {
-                        // Fall back to the other side's nearest, with secondBest correction.
-                        int altIdx, altSecond;
-                        double altDist, altSecondDist;
-                        if (isLowSide)
-                        {
-                            altIdx = flipped ? first.bestIdxB : first.bestIdxA;
-                            altDist = flipped ? first.bestDistB : first.bestDistA;
-                            altSecond = flipped ? first.secondBestIdxB : first.secondBestIdxA;
-                            altSecondDist = flipped ? first.secondBestDistB : first.secondBestDistA;
-                        }
-                        else
-                        {
-                            altIdx = flipped ? first.bestIdxA : first.bestIdxB;
-                            altDist = flipped ? first.bestDistA : first.bestDistB;
-                            altSecond = flipped ? first.secondBestIdxA : first.secondBestIdxB;
-                            altSecondDist = flipped ? first.secondBestDistA : first.secondBestDistB;
-                        }
-                        boundaryIdx = (altSecond >= 0 && altDist / altSecondDist < 0.3)
-                            ? altSecond : altIdx;
-                    }
-                }
-            }
+            // Unify boundary selection for all bends: use the NEAREST corrected
+            // parallel perimeter edge (cross-side), with secondBest skip for cutouts.
+            int candA = first.bestIdxA; double distA = first.bestDistA;
+            if (first.secondBestIdxA >= 0 && first.bestDistA / first.secondBestDistA < 0.3)
+                { candA = first.secondBestIdxA; distA = first.secondBestDistA; }
+            int candB = first.bestIdxB; double distB = first.bestDistB;
+            if (first.secondBestIdxB >= 0 && first.bestDistB / first.secondBestDistB < 0.3)
+                { candB = first.secondBestIdxB; distB = first.secondBestDistB; }
+            // Pick nearest corrected candidate, preferring Line over Arc.
+            bool lineA = candA >= 0 && perimData[candA].curve is Line;
+            bool lineB = candB >= 0 && perimData[candB].curve is Line;
+            if (lineA && lineB)
+                boundaryIdx = distA <= distB ? candA : candB;
+            else if (lineA)
+                boundaryIdx = candA;
+            else if (lineB)
+                boundaryIdx = candB;
             else
-                boundaryIdx = isLowSide
-                    ? (flipped ? first.farIdxA : first.farIdxB)
-                    : (flipped ? first.farIdxB : first.farIdxA);
+                boundaryIdx = distA <= distB ? candA : candB;
 
             if (boundaryIdx < 0)
             {
