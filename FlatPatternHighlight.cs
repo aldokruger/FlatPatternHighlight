@@ -11,13 +11,36 @@ namespace FlatPatternHighlight
     /// NXOpen plugin (C# .NET) for analyzing Sheet Metal flat patterns in NX 2512.
     ///
     /// The plugin runs in 3 sequential steps that build on each other:
-    ///   1. Outer Perimeter Filtering — reduces the raw exterior curves (incl. notch/cutout
-    ///      boundaries) to only the true external boundary edges via UF_MODL_ask_face_loops
-    ///      (P/Invoke) or a purely geometric fallback.
-    ///   2. Bend Center Lines — enumerates and highlights bend-up/bend-down center lines.
-    ///   3. Bend-to-Perimeter Proximity — for each bend, finds the nearest parallel perimeter
-    ///      curve on each side, measures distance to the bounding box, and optionally creates
-    ///      chain PMI dimensions.
+    ///
+    ///   1. OUTER PERIMETER FILTERING
+    ///      Reduces the raw exterior curves (which include notch/cutout boundaries) to only
+    ///      the true external boundary edges. Strategy: uses UF_MODL_ask_face_loops (P/Invoke
+    ///      into libufun.dll) to ask each face of the flat solid for its loops, keeps only
+    ///      outer loops (type == 1), then intersects with the FlatSolid body edges to filter
+    ///      out any inner holes. Falls back to a purely geometric convex-hull approximation
+    ///      when the P/Invoke path is unavailable.
+    ///
+    ///   2. BEND CENTER LINES
+    ///      Enumerates bend-up and bend-down center lines via FlatPattern.GetBendUpCenterLines /
+    ///      GetBendDownCenterLines. Highlights each line in NX with a dedicated color and
+    ///      attaches a "FlatPatternHighlight" user attribute so they can be identified later.
+    ///      Skips artefact curves whose midpoint lies on (or within 0.5 mm of) the outer
+    ///      perimeter — some NX configurations return perimeter edges from these APIs.
+    ///
+    ///   3. CHAIN PMI DIMENSIONS (AnalyzeBendToPerimeter → CreateChainDimensions)
+    ///      For each bend line, scans all outer-perimeter curves and collects parallel
+    ///      candidates on both sides of the bend (Side A = nml+, Side B = nml-). Six indices
+    ///      are tracked per side (nearest, 2nd-nearest, farthest, farthest-Line, nearest-Line,
+    ///      nearest-any). Applies a SmallEdgeRatio correction to replace corner-notch candidates
+    ///      with the longest (true boundary) segment. Groups parallel bends into direction
+    ///      groups, then splits each group into independent lanes (flanges) via range-overlap
+    ///      clustering. For each lane, partitions bends into "low side" and "high side"
+    ///      relative to the bbox centre, and creates a PMI chain:
+    ///         outer boundary → 1st bend → 2nd bend → ... → last bend.
+    ///      The boundary is always the FARTHEST parallel Line on the correct outer side
+    ///      (isLowSide ⊕ flipped determines which of Side A / Side B faces the outside).
+    ///      Uses PmiRapidDimensionBuilder with MeasurementMethod.Perpendicular so NX
+    ///      computes true geometric distances without any coordinate correction.
     /// </summary>
     public class HighlightFlatPattern
     {
@@ -490,14 +513,32 @@ namespace FlatPatternHighlight
                 }
 
                 // Rastreia múltiplos candidatos POR LADO (A=nml+, B=nml-) simultaneamente.
-                // Mantemos tantas variantes porque nenhuma métrica isolada é robusta:
-                //   - best/secondBest: a "mais próxima" pode ser um cutout fino; o ratio
-                //     best/secondBest revela isso (heurística do skip de cutout).
-                //   - far: a "mais distante" costuma ser a borda externa, mas pode ser
-                //     um notch pequeno de canto → corrigido por longestIdx.
-                //   - near: sem filtro de paralelismo, garante fallback p/ diagonais.
-                //   - bestLine/farLine: ignora Arc (fillet de canto) porque a cota PMI
-                //     perpendicular exige Line como 1ª referência.
+                // Cada variante serve um propósito específico no pipeline de seleção:
+                //
+                //   best / secondBest
+                //     O segmento paralelo mais próximo e o segundo mais próximo. O "best"
+                //     pode ser a face interna de uma flange ou um notch fino colado à dobra
+                //     (ex.: 2.85 mm) em vez da borda exterior real (22.85 mm).
+                //
+                //   far / farLine
+                //     O segmento paralelo mais distante — este é normalmente a BORDA EXTERIOR
+                //     (topo/base/lateral da aba). farLine restringe a somente objetos Line,
+                //     pois PmiRapidDimension exige Line como 1ª referência.
+                //     Corrigido após o scan por SmallEdgeRatio: se o segmento mais distante
+                //     for um notch curto de canto bbox, troca pelo segmento mais LONGO.
+                //
+                //   longestIdx / longestDist
+                //     Auxiliar do SmallEdgeRatio: segmento de maior comprimento encontrado.
+                //     Guardamos também longestDist para evitar trocar por uma aba interna
+                //     muito próxima da dobra (guarda >= 50% da distância do far atual).
+                //
+                //   near (sem filtro de paralelismo)
+                //     Fallback de último recurso para dobras diagonais onde o filtro de
+                //     paralelismo (|dot| >= 0.95) descarta todos os candidatos.
+                //
+                //   bestLine
+                //     Segmento mais próximo que é Line. Usado na promoção de Arc→Line para
+                //     dobras diagonais (onde bestIdx pode ser Arc).
                 double bestDistA = double.MaxValue, bestDistB = double.MaxValue;
                 int bestIdxA = -1, bestIdxB = -1;
                 double secondBestDistA = double.MaxValue, secondBestDistB = double.MaxValue;
@@ -506,6 +547,7 @@ namespace FlatPatternHighlight
                 int farIdxA = -1, farIdxB = -1;
                 double longestLenA = -1, longestLenB = -1;
                 int longestIdxA = -1, longestIdxB = -1;
+                double longestDistA = -1, longestDistB = -1;
                 double nearDistA = double.MaxValue, nearDistB = double.MaxValue;
                 int nearIdxA = -1, nearIdxB = -1;
                 double bestLineDistA = double.MaxValue, bestLineDistB = double.MaxValue;
@@ -563,7 +605,7 @@ namespace FlatPatternHighlight
                         else if (dist < secondBestDistA)
                             { secondBestDistA = dist; secondBestIdxA = pi; }
                         if (dist > farDistA) { farDistA = dist; farIdxA = pi; }
-                        if (plen > longestLenA) { longestLenA = plen; longestIdxA = pi; }
+                        if (plen > longestLenA) { longestLenA = plen; longestIdxA = pi; longestDistA = dist; }
                         if (dist < bestLineDistA && perimData[pi].curve is Line) { bestLineDistA = dist; bestLineIdxA = pi; }
                         if (dist > farLineDistA && perimData[pi].curve is Line) { farLineDistA = dist; farLineIdxA = pi; }
                     }
@@ -577,26 +619,34 @@ namespace FlatPatternHighlight
                         else if (dist < secondBestDistB)
                             { secondBestDistB = dist; secondBestIdxB = pi; }
                         if (dist > farDistB) { farDistB = dist; farIdxB = pi; }
-                        if (plen > longestLenB) { longestLenB = plen; longestIdxB = pi; }
+                        if (plen > longestLenB) { longestLenB = plen; longestIdxB = pi; longestDistB = dist; }
                         if (dist < bestLineDistB && perimData[pi].curve is Line) { bestLineDistB = dist; bestLineIdxB = pi; }
                         if (dist > farLineDistB && perimData[pi].curve is Line) { farLineDistB = dist; farLineIdxB = pi; }
                     }
                 }
 
-                // --- Correção de small-edge (notch de canto) ---
-                // A curva paralela mais distante (farIdx) costuma ser a borda externa,
-                // mas em cantos com alívio/notch pode ser um segmento curto e enganoso.
-                // Se ela for < 50% (SmallEdgeRatio) do segmento mais longo do mesmo
-                // lado, trocamos para o mais longo — mais provável de ser a aba real.
+                // --- Correção SmallEdgeRatio (notch de canto bbox) ---
+                // Problema: em certas geometrias o segmento mais distante é um notch
+                // pequeno de canto (ex.: 3 mm de comprimento numa caixa com 400 mm de
+                // largura), não a borda exterior real. O segmento mais longo paralelo
+                // é melhor candidato.
+                // Guarda extra "longestDist >= farDist * 0.5": evita trocar farIdx por
+                // um segmento longo que esteja muito PRÓXIMO à dobra (e.g. face de
+                // flange a 2.85 mm quando a borda real está a 29.85 mm).
+                // Aplicado a farIdx E a farLineIdx (variante restrita a Line).
                 const double SmallEdgeRatio = 0.5;
-                if (farIdxA >= 0 && longestIdxA >= 0 && perimData[farIdxA].len < SmallEdgeRatio * longestLenA)
+                if (farIdxA >= 0 && longestIdxA >= 0 && perimData[farIdxA].len < SmallEdgeRatio * longestLenA
+                    && longestDistA >= farDistA * 0.5)
                     farIdxA = longestIdxA;
-                if (farIdxB >= 0 && longestIdxB >= 0 && perimData[farIdxB].len < SmallEdgeRatio * longestLenB)
+                if (farIdxB >= 0 && longestIdxB >= 0 && perimData[farIdxB].len < SmallEdgeRatio * longestLenB
+                    && longestDistB >= farDistB * 0.5)
                     farIdxB = longestIdxB;
                 // Aplica a mesma correção aos candidatos restritos a Line.
-                if (farLineIdxA >= 0 && longestIdxA >= 0 && perimData[farLineIdxA].len < SmallEdgeRatio * longestLenA)
+                if (farLineIdxA >= 0 && longestIdxA >= 0 && perimData[farLineIdxA].len < SmallEdgeRatio * longestLenA
+                    && longestDistA >= farLineDistA * 0.5)
                     farLineIdxA = longestIdxA;
-                if (farLineIdxB >= 0 && longestIdxB >= 0 && perimData[farLineIdxB].len < SmallEdgeRatio * longestLenB)
+                if (farLineIdxB >= 0 && longestIdxB >= 0 && perimData[farLineIdxB].len < SmallEdgeRatio * longestLenB
+                    && longestDistB >= farLineDistB * 0.5)
                     farLineIdxB = longestIdxB;
 
                 // Compute the distance from the bend midpoint to the bounding box edge
@@ -608,19 +658,28 @@ namespace FlatPatternHighlight
                 lw.WriteLine($"  Bend[{bi}] Tag={bend.Tag}  Mid=({mu:F1},{mv:F1})  Dir=({bdir.X:F3},{bdir.Y:F3})  Len={blen:F1}");
                 lw.WriteLine($"    Side A (nml+): nearest={bestDistA,8:F2}  bboxDist={sideADist,8:F2}" +
                     (bestIdxA >= 0 ? $"  perimTag={outerPerim[bestIdxA].Tag}" : "  (none)"));
+                lw.WriteLine($"                   2ndNearest={secondBestDistA,8:F2}" +
+                    (secondBestIdxA >= 0 ? $"  perimTag={perimData[secondBestIdxA].curve.Tag}" : "  (none)"));
+                lw.WriteLine($"                   farthest  ={farDistA,8:F2}" +
+                    (farIdxA >= 0 ? $"  perimTag={perimData[farIdxA].curve.Tag}  segLen={perimData[farIdxA].len:F1}" : "  (none)"));
 
                 lw.WriteLine($"    Side B (nml-): nearest={bestDistB,8:F2}  bboxDist={sideBDist,8:F2}" +
                     (bestIdxB >= 0 ? $"  perimTag={outerPerim[bestIdxB].Tag}" : "  (none)"));
+                lw.WriteLine($"                   2ndNearest={secondBestDistB,8:F2}" +
+                    (secondBestIdxB >= 0 ? $"  perimTag={perimData[secondBestIdxB].curve.Tag}" : "  (none)"));
+                lw.WriteLine($"                   farthest  ={farDistB,8:F2}" +
+                    (farIdxB >= 0 ? $"  perimTag={perimData[farIdxB].curve.Tag}  segLen={perimData[farIdxB].len:F1}" : "  (none)"));
 
                 lw.WriteLine("");
 
-                // --- Fallback para dobras diagonais ---
-                // Uma dobra é "diagonal" quando tem componente significativa em ambos
-                // os eixos do plano UV (|dir.X|>0.2 E |dir.Y|>0.2). Essas dobras raramente
-                // têm curva de perímetro perfeitamente paralela, então relaxamos:
-                //   1. se o candidato mais próximo for Arc, troca para o Line paralelo;
-                //   2. se não houver paralelo, usa o nearIdx (mais próximo sem filtro
-                //      de paralelismo) como último recurso.
+                // --- Promoção Arc→Line para dobras diagonais ---
+                // Uma dobra é "diagonal" quando tem componente significativa em ambos os
+                // eixos UV (|dir.X|>0.2 E |dir.Y|>0.2). Essas dobras raramente têm uma
+                // curva de perímetro com paralelismo perfeito (|dot|>=0.95), então:
+                //   1. Se bestIdx for Arc (fillet de canto), troca para bestLineIdx no
+                //      mesmo lado — evita o erro 1175009 do builder PMI perpendicular.
+                //   2. Se nenhum candidato paralelo foi encontrado, usa nearIdx (mais
+                //      próximo sem filtro de paralelismo) como último recurso.
                 if (Math.Abs(bdir.X) > 0.2 && Math.Abs(bdir.Y) > 0.2)
                 {
                     if (bestIdxA >= 0 && !(perimData[bestIdxA].curve is Line) && bestLineIdxA >= 0)
@@ -668,14 +727,16 @@ namespace FlatPatternHighlight
         }
 
         /// <summary>
-        /// Group parallel bend lines into clusters, then split each cluster into
-        /// independent lanes (flanges) based on range overlap and length similarity,
-        /// then create chain dimensions for each lane.
+        /// Ponto de entrada do dimensionamento em cadeia. Agrupa as dobras paralelas em
+        /// "grupos de direção" (dot >= 0.95), depois divide cada grupo em lanes independentes
+        /// via <see cref="ClusterByRangeOverlap"/>, e delega a criação de cotas PMI para
+        /// cada lane via <see cref="CreateChainForGroup"/>.
         ///
-        /// "Lanes" are sets of parallel bends that share the same spatial extent
-        /// along the bend direction — they belong to the same flange chain.
-        /// Parallel bends in different lanes (e.g. left flange vs right flange)
-        /// are dimensioned independently.
+        /// "Lane" = conjunto de dobras paralelas com sobreposição de range (projeção ao longo
+        /// da direção da dobra) E comprimentos similares (>= 70%). Dobras na mesma lane
+        /// pertencem à mesma aba/flange e são cotadas em uma única cadeia.
+        /// Dobras em lanes diferentes (ex.: aba esquerda vs direita, ou flange total vs flange
+        /// recortada) são cotadas independentemente.
         /// </summary>
         private static int CreateChainDimensions(Part workPart,
             List<(int bi, Curve bend, Point3d pt, Point3d bs, Point3d be, Vector3d dir, Vector3d nml, int bestIdxA, int bestIdxB, int farIdxA, int farIdxB, int nearIdxA, int nearIdxB, int bestLineIdxA, int bestLineIdxB, int farLineIdxA, int farLineIdxB, double bestDistA, double bestDistB, int secondBestIdxA, int secondBestIdxB, double secondBestDistA, double secondBestDistB)> bendInfos,
@@ -720,11 +781,21 @@ namespace FlatPatternHighlight
         private const double LaneLengthRatioThreshold = 0.7;
 
         /// <summary>
-        /// Split a direction-group of bends into separate lanes (independent flanges)
-        /// by checking whether their projected ranges along the bend direction overlap
-        /// AND their lengths are similar.
+        /// Divide um grupo de dobras paralelas em lanes (abas/flanges independentes).
         ///
-        /// After initial assignment, overlapping lanes are consolidated greedily.
+        /// Algoritmo (dois passos):
+        ///   1. Atribuição greedy: para cada dobra, projeta seus endpoints na direção
+        ///      de referência do grupo (refDir) para obter [lo, hi]. Coloca a dobra na
+        ///      primeira lane existente que:
+        ///        (a) tenha sobreposição de range com [lo, hi], E
+        ///        (b) tenha comprimento similar (ratio >= LaneLengthRatioThreshold = 0.7).
+        ///      Se nenhuma lane combinar, cria uma nova lane.
+        ///   2. Consolidação: repete até convergência, fundindo pares de lanes que se
+        ///      tornaram sobrepostas após extensões de range causadas pelas atribuições.
+        ///
+        /// Propósito: distinguir a aba horizontal inteira (ex.: 337 mm) de uma aba
+        /// recortada menor (ex.: 271 mm) que, mesmo paralela, pertence a uma cadeia
+        /// de cotas separada (flange diferente na dobra em U).
         /// </summary>
         private static List<List<int>> ClusterByRangeOverlap(
             List<(int bi, Curve bend, Point3d pt, Point3d bs, Point3d be, Vector3d dir, Vector3d nml, int bestIdxA, int bestIdxB, int farIdxA, int farIdxB, int nearIdxA, int nearIdxB, int bestLineIdxA, int bestLineIdxB, int farLineIdxA, int farLineIdxB, double bestDistA, double bestDistB, int secondBestIdxA, int secondBestIdxB, double secondBestDistA, double secondBestDistB)> bendInfos,
@@ -797,10 +868,21 @@ namespace FlatPatternHighlight
         }
 
         /// <summary>
-        /// For a single lane (set of parallel, overlapping bends), partition bends
-        /// into two sides ("low" and "high" relative to the bounding box centre),
-        /// then create chain dimensions from the farthest perimeter curve → first bend
-        /// → next bend → etc. on each side.
+        /// Para uma lane (conjunto de dobras paralelas com sobreposição de range):
+        ///   1. Projeta o midpoint de cada dobra na direção normal do grupo (refNml)
+        ///      para obter um "offset" escalar.
+        ///   2. Classifica cada dobra como "lowSide" ou "highSide" comparando a distância
+        ///      do offset aos extremos do bbox (bboxLow / bboxHigh projetados na refNml).
+        ///      A dobra mais próxima do extreme baixo vai para lowSide; do extreme alto,
+        ///      para highSide. Isso corresponde fisicamente às duas extremidades opostas
+        ///      da aba no padrão plano.
+        ///   3. Ordena cada lado pelo offset (lowSide ASC, highSide DESC) para criar a
+        ///      cadeia de cotas na ordem espacial correta.
+        ///   4. Chama <see cref="CreateChainSide"/> para cada lado.
+        ///
+        /// "flipped" indica que a dobra tem direção oposta à dobra de referência do grupo
+        /// (dot &lt; 0). Isso inverte qual lado (A=nml+ ou B=nml−) é "externo" na seleção
+        /// do boundary em CreateChainSide.
         /// </summary>
         private static int CreateChainForGroup(Part workPart,
             List<(int bi, Curve bend, Point3d pt, Point3d bs, Point3d be, Vector3d dir, Vector3d nml, int bestIdxA, int bestIdxB, int farIdxA, int farIdxB, int nearIdxA, int nearIdxB, int bestLineIdxA, int bestLineIdxB, int farLineIdxA, int farLineIdxB, double bestDistA, double bestDistB, int secondBestIdxA, int secondBestIdxB, double secondBestDistA, double secondBestDistB)> bendInfos,
@@ -852,10 +934,24 @@ namespace FlatPatternHighlight
         }
 
         /// <summary>
-        /// <summary>
-        /// Cria cotas ao longo de um lado da cadeia: a primeira cota vai da curva de
-        /// boundary (selecionada por <see cref="CreateChainForGroup"/>) até a 1ª dobra,
-        /// e as seguintes conectam dobras consecutivas na ordem de offset.
+        /// Cria as cotas PMI para um único lado de uma lane (cadeia de dobras paralelas).
+        ///
+        /// Estrutura da cadeia produzida:
+        ///   [outer boundary] ←dim0→ [bend_0] ←dim1→ [bend_1] ←dim2→ ... ←dimN→ [bend_N]
+        ///
+        /// Seleção do boundary (borda exterior):
+        ///   A cota boundary→bend_0 mede a largura da aba, não a espessura do material.
+        ///   Por isso o boundary é SEMPRE o segmento paralelo mais DISTANTE (farLineIdx)
+        ///   no lado correto — já corrigido por SmallEdgeRatio. Qual lado é "externo"
+        ///   depende de isLowSide ⊕ flipped:
+        ///     isLow=true,  flipped=false → Lado B (nml−)
+        ///     isLow=true,  flipped=true  → Lado A (nml+)
+        ///     isLow=false, flipped=false → Lado A (nml+)
+        ///     isLow=false, flipped=true  → Lado B (nml−)
+        ///   Fallback se farLineIdx não existir: farIdx (pode ser Arc → arc-guard converte
+        ///   em linha indicadora); depois lado oposto; por último nearIdx.
+        ///
+        /// Cada cota é criada por <see cref="CreatePmiRapidDimension"/>.
         /// </summary>
         private static int CreateChainSide(Part workPart,
             List<(int bi, Curve bend, Point3d pt, Point3d bs, Point3d be, Vector3d dir, Vector3d nml, int bestIdxA, int bestIdxB, int farIdxA, int farIdxB, int nearIdxA, int nearIdxB, int bestLineIdxA, int bestLineIdxB, int farLineIdxA, int farLineIdxB, double bestDistA, double bestDistB, int secondBestIdxA, int secondBestIdxB, double secondBestDistA, double secondBestDistB)> bendInfos,
@@ -870,42 +966,33 @@ namespace FlatPatternHighlight
             int count = 0;
 
             // Para a 1ª dobra da cadeia, criar uma cota dela até a curva de
-            // boundary verdadeira. A seleção abaixo é UNIFICADA para todos os bends:
-            // usa a curva paralela mais próxima CORRIGIDA (cross-side) e aplica o
-            // skip de cutout antes de escolher.
+            // boundary verdadeira.
             var first = bendInfos[side[0].idx];
             bool flipped = side[0].flipped;
 
-            // --- Skip de cutout (heurística do ratio 0.3) ---
-            // Se a curva mais próxima for MUITO mais perto que a 2ª (ratio < 0.3),
-            // ela é quase sempre um recorte fino (cutout/relief) grudado na dobra,
-            // e não a borda externa real. Nesse caso trocamos para a 2ª mais próxima.
-            // O threshold 0.3 vem de observação empírica: cutouts grudados ficam a
-            // <30% da distância da borda real.
-            int candA = first.bestIdxA; double distA = first.bestDistA;
-            if (first.secondBestIdxA >= 0 && first.bestDistA / first.secondBestDistA < 0.3)
-                { candA = first.secondBestIdxA; distA = first.secondBestDistA; }
-            int candB = first.bestIdxB; double distB = first.bestDistB;
-            if (first.secondBestIdxB >= 0 && first.bestDistB / first.secondBestDistB < 0.3)
-                { candB = first.secondBestIdxB; distB = first.secondBestDistB; }
+            // --- Seleção do boundary pela borda MAIS DISTANTE ---
+            // A cota boundary→dobra deve medir a largura da aba, não a espessura do
+            // material. A borda exterior é SEMPRE o segmento paralelo mais distante
+            // (farIdx), já corrigido pelo SmallEdgeRatio para ignorar notches de canto.
+            //
+            // Regra de lado: isLowSide ⊕ flipped determina o lado "para fora":
+            //   isLow=true,  flipped=false → Lado B (nml-)
+            //   isLow=true,  flipped=true  → Lado A (nml+)
+            //   isLow=false, flipped=false → Lado A (nml+)
+            //   isLow=false, flipped=true  → Lado B (nml-)
+            // Preferimos farLineIdx (somente Lines) sobre farIdx (pode ser Arc, o Arc
+            // guard converte em linha indicadora). Fallback para o lado oposto se o
+            // lado primário estiver vazio.
+            bool useB = isLowSide ^ flipped;
+            int primaryFarLine = useB ? first.farLineIdxB : first.farLineIdxA;
+            int primaryFar     = useB ? first.farIdxB     : first.farIdxA;
+            int secondFarLine  = useB ? first.farLineIdxA : first.farLineIdxB;
+            int secondFar      = useB ? first.farIdxA     : first.farIdxB;
 
-            // --- Seleção final do boundary ---
-            // Entre os dois lados (A=nml+, B=nml-) escolhe o mais próximo após a
-            // correção de cutout, preferindo Line sobre Arc. A preferência por Line
-            // existe porque a cota PMI perpendicular (MeasurementMethod.Perpendicular)
-            // exige uma Line como 1ª referência; Arcs (fillets de canto) causam o
-            // erro 1175009 e disparam o fallback de indicator-line vermelha abaixo.
-            int boundaryIdx = -1;
-            bool lineA = candA >= 0 && perimData[candA].curve is Line;
-            bool lineB = candB >= 0 && perimData[candB].curve is Line;
-            if (lineA && lineB)
-                boundaryIdx = distA <= distB ? candA : candB;
-            else if (lineA)
-                boundaryIdx = candA;
-            else if (lineB)
-                boundaryIdx = candB;
-            else
-                boundaryIdx = distA <= distB ? candA : candB;
+            int boundaryIdx = primaryFarLine >= 0 ? primaryFarLine
+                           : primaryFar     >= 0 ? primaryFar
+                           : secondFarLine  >= 0 ? secondFarLine
+                           :                       secondFar;
 
             if (boundaryIdx < 0)
             {
@@ -926,6 +1013,11 @@ namespace FlatPatternHighlight
                     lw.WriteLine($"  [Chain] No boundary curve found for Bend Tag={first.bend.Tag} on {(isLowSide ? "low" : "high")} side.");
                 }
             }
+            lw.WriteLine($"  [Chain] Bend[{first.bi}] Tag={first.bend.Tag} isLow={isLowSide} flipped={flipped} useB={useB}" +
+                $"  primaryFarLine={( primaryFarLine >= 0 ? perimData[primaryFarLine].curve.Tag.ToString() : "-")}" +
+                $"  primaryFar={( primaryFar >= 0 ? perimData[primaryFar].curve.Tag.ToString() : "-")}" +
+                $"  → boundary={(boundaryIdx >= 0 ? perimData[boundaryIdx].curve.Tag.ToString() : "NONE")}");
+
             if (boundaryIdx >= 0)
             {
                 var seg = perimData[boundaryIdx];
@@ -993,16 +1085,26 @@ namespace FlatPatternHighlight
         }
 
         /// <summary>
-        /// Cria uma cota PMI perpendicular usando PmiRapidDimensionBuilder com
-        /// MeasurementMethod.Perpendicular. Referencia objetos Curve reais, então o NX
-        /// calcula a distância perpendicular geométrica verdadeira — funciona para dobras
-        /// horizontais, verticais e diagonais sem correção de Y.
+        /// Cria uma cota PMI perpendicular entre dois objetos Curve (curveA → curveB).
         ///
-        /// Cascata de fallback (cada estágio é mais tolerante a falhas):
-        ///   1. Cota PMI perpendicular (referenciando 2 Curves) — caminho ideal.
-        ///   2. Se ErrorCode 948802 (sem licença PMI/GD&amp;T) → indicator-line vermelha.
-        ///   3. Se outro erro do builder → point-fallback (cota horizontal/vertical
-        ///      entre 2 Points auxiliares blanked) — ver CreatePmiPointFallbackDimension.
+        /// Usa PmiRapidDimensionBuilder com MeasurementMethod.Perpendicular, que referencia
+        /// os objetos Curve reais. O NX calcula a distância perpendicular geométrica
+        /// verdadeira — funciona para dobras horizontais, verticais e diagonais sem nenhuma
+        /// correção de coordenada pelo código.
+        ///
+        /// Cascata de fallback (ordem de preferência):
+        ///   1. Cota PMI perpendicular (2 Curves, PmiRapidDimensionBuilder) — caminho ideal.
+        ///      O texto da cota é posicionado em <paramref name="origin"/>.
+        ///   2. Se ErrorCode 948802 (sem licença PMI/GD&amp;T) → indicator-line vermelha (cor 36)
+        ///      entre os pontos de pick, retorna false (não cria cota).
+        ///   3. Se outro NXException ou Exception do builder → point-fallback:
+        ///      cria dois Points auxiliares (blanked) e uma cota Horizontal/Vertical entre eles.
+        ///      Direção escolhida pelo eixo de maior variação entre os pontos vs. normalAxis.
+        ///      Ver <see cref="CreatePmiPointFallbackDimension"/>.
+        ///
+        /// Cada tentativa usa um UndoMark para permitir rollback seguro em caso de falha.
+        /// Cotas criadas recebem o atributo de usuário "FlatPatternHighlight=true" para
+        /// identificação e limpeza posterior.
         /// </summary>
         private static bool CreatePmiRapidDimension(Part workPart,
             Curve curveA, Point3d pickA,
@@ -1210,9 +1312,23 @@ namespace FlatPatternHighlight
         }
 
         /// <summary>
-        /// Compute the origin (annotation text location) for a chain dimension.
-        /// Places the text outside the bounding box, stacked vertically/horizontally
-        /// by level (0 = outermost, 1 = next, etc.).
+        /// Calcula a origem (posição do texto da cota) para uma cota da cadeia.
+        ///
+        /// Posicionamento:
+        ///   - As cotas são empilhadas fora do bbox com uma margem base + espaçamento por
+        ///     nível (level 0 = cota mais externa, level 1 = próxima, etc.).
+        ///   - Se a medição é predominantemente V-dominante (|ΔV| >= |ΔU|), o texto vai
+        ///     para fora da borda U-máxima (lado direito do padrão plano).
+        ///   - Se é predominantemente U-dominante (|ΔU| > |ΔV|), vai para fora da borda
+        ///     V-máxima (topo do padrão plano).
+        ///   - margin e spacing são proporcionais ao tamanho do bbox para funcionar
+        ///     com peças de tamanhos muito diferentes.
+        ///
+        /// Conversão UV → XYZ: depende de normalAxis (eixo perpendicular ao plano do
+        /// padrão plano):
+        ///   normalAxis=0 (X-normal) → (normalVal, textU, textV) — U=Y, V=Z
+        ///   normalAxis=1 (Y-normal) → (textU, normalVal, textV) — U=X, V=Z
+        ///   normalAxis=2 (Z-normal) → (textU, textV, normalVal) — U=X, V=Y
         /// </summary>
         private static Point3d CreateChainOrigin(
             Point3d pointA,
