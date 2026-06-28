@@ -1,0 +1,1087 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="generator" content="FlatPatternHighlight Documentation">
+    <title>FlatPatternHighlight — Documentação Técnica</title>
+    <style>
+        :root {
+            --bg: #1e1e2e;
+            --bg-card: #282840;
+            --bg-code: #1a1a2e;
+            --fg: #e0e0e0;
+            --fg-dim: #a0a0b0;
+            --accent: #7c9bff;
+            --accent2: #ff9e64;
+            --accent3: #9ece6a;
+            --border: #3a3a5c;
+            --warning: #e5a83e;
+            --error: #f7768e;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--fg);
+            line-height: 1.7;
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 2rem 1.5rem 4rem;
+        }
+        h1, h2, h3, h4 { color: var(--accent); font-weight: 600; letter-spacing: -0.01em; }
+        h1 { font-size: 2.4rem; border-bottom: 2px solid var(--border); padding-bottom: .5rem; margin-bottom: 1.5rem; }
+        h2 { font-size: 1.6rem; margin-top: 2.5rem; margin-bottom: 1rem; }
+        h3 { font-size: 1.25rem; margin-top: 1.8rem; color: var(--accent2); }
+        h4 { font-size: 1.05rem; margin-top: 1.2rem; color: var(--accent3); }
+        p, li { margin-bottom: .6rem; }
+        a { color: var(--accent); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+
+        /* Navigation sidebar */
+        .toc { background: var(--bg-card); border-radius: 10px; padding: 1.2rem 1.5rem; margin-bottom: 2rem; border: 1px solid var(--border); }
+        .toc h2 { margin: 0 0 .6rem; font-size: 1.2rem; border: none; }
+        .toc ul { list-style: none; padding-left: 0; columns: 2; column-gap: 2rem; }
+        .toc li { margin-bottom: .25rem; }
+        .toc a { font-size: .92rem; }
+        .toc ul ul { padding-left: 1.2rem; columns: 1; }
+
+        /* Cards / info boxes */
+        .info-box { background: var(--bg-card); border-left: 4px solid var(--accent); border-radius: 8px; padding: 1rem 1.2rem; margin: 1rem 0; }
+        .info-box.warn { border-left-color: var(--warning); }
+        .info-box.err { border-left-color: var(--error); }
+
+        /* Code blocks */
+        pre {
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem 1.2rem;
+            overflow-x: auto;
+            font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+            font-size: .85rem;
+            line-height: 1.5;
+            tab-size: 4;
+        }
+        code {
+            background: var(--bg-code);
+            padding: .1em .4em;
+            border-radius: 4px;
+            font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+            font-size: .88em;
+        }
+        pre code { background: none; padding: 0; border-radius: 0; }
+
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: .9rem; }
+        th, td { border: 1px solid var(--border); padding: .5rem .8rem; text-align: left; }
+        th { background: var(--bg-card); color: var(--accent); font-weight: 600; }
+        tr:nth-child(even) { background: rgba(255,255,255,.02); }
+
+        /* Badge / tag */
+        .badge {
+            display: inline-block;
+            background: var(--accent);
+            color: #fff;
+            font-size: .7rem;
+            font-weight: 600;
+            padding: .15em .7em;
+            border-radius: 20px;
+            text-transform: uppercase;
+            letter-spacing: .03em;
+        }
+        .badge.green { background: var(--accent3); }
+        .badge.orange { background: var(--accent2); }
+        .badge.red { background: var(--error); }
+
+        .section-anchor { scroll-margin-top: 1rem; }
+        hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+
+        @media (max-width: 700px) {
+            .toc ul { columns: 1; }
+            body { padding: 1rem; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ================================================================== -->
+<!-- HEADER                                                             -->
+<!-- ================================================================== -->
+<h1>FlatPatternHighlight</h1>
+<p style="font-size:1.1rem;color:var(--fg-dim);margin-bottom:1.8rem;">
+    NXOpen C#/.NET plugin — Análise automatizada de <em>flat pattern</em> de Sheet Metal no Siemens NX 2512.
+</p>
+
+<div class="info-box" style="margin-bottom:2rem;">
+    <strong>Repositório:</strong> <code>aldokruger/FlatPatternHighlight</code> &nbsp;|&nbsp;
+    <strong>Versão do Documento:</strong> 0.4.0 &nbsp;|&nbsp;
+    <strong>Linguagem:</strong> C# (.NET Framework 4.8) &nbsp;|&nbsp;
+    <strong>Plataforma:</strong> x64
+</div>
+
+<!-- ================================================================== -->
+<!-- TABLE OF CONTENTS                                                  -->
+<!-- ================================================================== -->
+<nav class="toc" id="toc">
+    <h2>📑 Índice</h2>
+    <ul>
+        <li><a href="#intro">1. Introdução</a>
+            <ul>
+                <li><a href="#intro-problema">1.1 O Problema</a></li>
+                <li><a href="#intro-solucao">1.2 A Solução</a></li>
+                <li><a href="#intro-fluxo">1.3 Fluxo de Análise (3 Steps)</a></li>
+            </ul>
+        </li>
+        <li><a href="#instalacao">2. Instalação &amp; Configuração</a>
+            <ul>
+                <li><a href="#instalacao-prereq">2.1 Pré-requisitos</a></li>
+                <li><a href="#instalacao-build">2.2 Build</a></li>
+                <li><a href="#instalacao-deploy">2.3 Deploy</a></li>
+                <li><a href="#instalacao-execucao">2.4 Execução</a></li>
+            </ul>
+        </li>
+        <li><a href="#referencia">3. Referência de Classes &amp; Métodos</a>
+            <ul>
+                <li><a href="#ref-highlightflatpattern">3.1 Classe <code>HighlightFlatPattern</code></a></li>
+                <li><a href="#ref-main">3.2 Método <code>Main()</code> (Entry Point)</a></li>
+                <li><a href="#ref-step1">3.3 Step 1 — <code>HighlightOuterPerimeter()</code></a></li>
+                <li><a href="#ref-step2">3.4 Step 2 — <code>HighlightBendCenterLines()</code></a></li>
+                <li><a href="#ref-step3">3.5 Step 3 — <code>AnalyzeBendToPerimeter()</code></a></li>
+                <li><a href="#ref-pmi">3.6 Criação de Cotas PMI</a></li>
+                <li><a href="#ref-utils">3.7 Métodos Utilitários</a></li>
+                <li><a href="#ref-pinvoke">3.8 P/Invoke — UF_MODL (libufun.dll)</a></li>
+                <li><a href="#ref-lifecycle">3.9 Ciclo de Vida NX</a></li>
+            </ul>
+        </li>
+        <li><a href="#exemplos">4. Exemplos de Uso</a>
+            <ul>
+                <li><a href="#exemplo-basico">4.1 Execução Básica (Ctrl+U)</a></li>
+                <li><a href="#exemplo-log">4.2 Interpretação do Log File</a></li>
+                <li><a href="#exemplo-pmi">4.3 Cotas PMI em Cadeia</a></li>
+                <li><a href="#exemplo-men">4.4 Menu &amp; Ribbon</a></li>
+            </ul>
+        </li>
+        <li><a href="#algoritmos">5. Algoritmos em Detalhe</a>
+            <ul>
+                <li><a href="#algo-perimeter">5.1 Outer Perimeter Filtering</a></li>
+                <li><a href="#algo-bend">5.2 Bend-to-Perimeter Proximity</a></li>
+                <li><a href="#algo-lane">5.3 Lane Clustering</a></li>
+                <li><a href="#algo-chain">5.4 Chain PMI Dimensioning</a></li>
+            </ul>
+        </li>
+        <li><a href="#limitacoes">6. Limitações Conhecidas</a></li>
+        <li><a href="#changelog">7. Changelog</a></li>
+    </ul>
+</nav>
+
+<!-- ================================================================== -->
+<!-- 1. INTRODUÇÃO                                                      -->
+<!-- ================================================================== -->
+<section class="section-anchor" id="intro">
+<h2>1. Introdução</h2>
+
+<p>
+    O <strong>FlatPatternHighlight</strong> é um plugin NXOpen em C#/.NET para o
+    <strong>Siemens NX 2512</strong> que automatiza a análise de <em>flat patterns</em>
+    (padrões planos) de peças de Sheet Metal. O plugin processa o padrão plano em
+    <strong>3 etapas sequenciais</strong> e produz um log diagnóstico detalhado, além
+    de criar opcionalmente <strong>cotas PMI em cadeia</strong> entre as linhas de centro
+    de dobra e o contorno externo verdadeiro da peça.
+</p>
+
+<h3 id="intro-problema">1.1 O Problema</h3>
+<p>
+    Em peças de chapa dobrada (Sheet Metal), o flat pattern gerado pelo NX contém:
+</p>
+<ul>
+    <li><strong>74+ curvas externas</strong> (<code>GetExteriorCurves()</code>) que incluem <strong>recortes internos</strong>, <strong>alívios</strong>, <strong>notches</strong> e <strong>furos</strong> — não apenas o contorno externo real.</li>
+    <li><strong>14+ linhas de centro de dobra</strong> que precisam ser correlacionadas com o perímetro externo para determinar qual lado de cada dobra aponta para a borda da peça.</li>
+    <li>O <strong>processo manual</strong> — contar dobras e inspecionar visualmente o contorno — é sujeito a erro e inconsistente.</li>
+</ul>
+
+<h3 id="intro-solucao">1.2 A Solução</h3>
+<p>
+    O plugin resolve esse problema com <strong>3 etapas automáticas e determinísticas</strong>:
+</p>
+<ol>
+    <li><strong>Filtragem do Perímetro Externo</strong> — reduz as curvas externas brutas ao contorno externo verdadeiro usando P/Invoke em <code>libufun.dll</code> (<code>UF_MODL_ask_face_loops</code>).</li>
+    <li><strong>Linhas de Centro de Dobra</strong> — enumera e destaca as linhas de centro de dobra (up e down).</li>
+    <li><strong>Proximidade Dobra→Perímetro</strong> — para cada dobra, encontra a curva de perímetro paralela mais próxima em cada lado, cria um log tabular e gera cotas PMI em cadeia.</li>
+</ol>
+
+<h3 id="intro-fluxo">1.3 Fluxo de Análise (3 Steps)</h3>
+<pre><code>Main()
+  │
+  ├─ FindFlatPattern() ─── localiza a Feature FlatPattern
+  │
+  ├─ [STEP 1] HighlightOuterPerimeter()
+  │   ├─ GetExteriorCurves()         → 74 curvas brutas
+  │   ├─ FindFlatSolidBody()         → 3 estratégias de busca
+  │   ├─ UF_MODL_ask_face_loops()    → P/Invoke: outer loops das faces
+  │   └─ outerPerim                  → somente curvas do contorno externo verdadeiro
+  │
+  ├─ [STEP 2] HighlightBendCenterLines()
+  │   ├─ GetBendUpCenterLines()      → linhas de centro (up)
+  │   ├─ GetBendDownCenterLines()    → linhas de centro (down)
+  │   └─ bendLines                   → lista completa
+  │
+  └─ [STEP 3] AnalyzeBendToPerimeter()
+      ├─ DetectNormalAxis()          → plano do flat pattern (XY, XZ ou YZ)
+      ├─ Bounding box das curvas de perímetro
+      ├─ Para cada bend line:
+      │   ├─ Direção + normal perpendicular
+      │   ├─ Filtra curvas paralelas (dot > 0.95) com overlap
+      │   ├─ nearest / farIdx / secondBestIdx (rastreio multi-candidato)
+      │   └─ bboxDist = distância até a borda do bounding box
+      ├─ [SUBPASSO] Lane Clustering
+      │   └─ Agrupa dobras paralelas com overlap em "flanges" independentes
+      └─ [SUBPASSO] Chain PMI Dimensions
+          └─ Cria cotas PMI: borda → 1ª dobra → 2ª dobra → ...
+</code></pre>
+</section>
+
+<hr>
+
+<!-- ================================================================== -->
+<!-- 2. INSTALAÇÃO & CONFIGURAÇÃO                                       -->
+<!-- ================================================================== -->
+<section class="section-anchor" id="instalacao">
+<h2>2. Instalação &amp; Configuração</h2>
+
+<h3 id="instalacao-prereq">2.1 Pré-requisitos</h3>
+<table>
+    <tr><th>Componente</th><th>Versão / Caminho</th></tr>
+    <tr><td>Siemens NX</td><td>2512 (ou superior, com licença Sheet Metal + PMI)</td></tr>
+    <tr><td>.NET SDK</td><td>.NET Framework 4.8 (target: <code>net48</code>)</td></tr>
+    <tr><td>Platform</td><td>x64</td></tr>
+    <tr><td>NXOpen.dll</td><td><code>%UGII_BASE_DIR%\NXBIN\managed\</code></td></tr>
+    <tr><td>NXOpenUI.dll</td><td><code>%UGII_BASE_DIR%\NXBIN\managed\</code></td></tr>
+    <tr><td>NXOpen.Utilities.dll</td><td><code>%UGII_BASE_DIR%\NXBIN\managed\</code></td></tr>
+    <tr><td>libufun.dll</td><td><code>%UGII_BASE_DIR%\NXBIN\</code> (P/Invoke nativo)</td></tr>
+    <tr><td>NXSigningResource.res</td><td><code>%UGII_BASE_DIR%\UGOPEN\</code></td></tr>
+</table>
+
+<div class="info-box warn">
+    <strong>Licença:</strong> A criação de cotas PMI via <code>PmiRapidDimensionBuilder</code> requer uma licença PMI/GD&amp;T ativa. Sem ela, o plugin produz <em>indicator lines</em> vermelhas como fallback.
+</div>
+
+<h3 id="instalacao-build">2.2 Build</h3>
+<p>O projeto utiliza o SDK style <code>.csproj</code> com <code>Microsoft.NET.Sdk</code>. As referências às DLLs do NX são resolvidas via <code>HintPath</code>.</p>
+
+<p><strong>Via script PowerShell (recomendado):</strong></p>
+<pre><code>.\build.ps1 -NxDir D:\NX2512 -Configuration Release</code></pre>
+<p>O script <code>build.ps1</code> executa automaticamente:</p>
+<ol>
+    <li>Verifica pré-requisitos (dotnet SDK, DLLs do NX)</li>
+    <li>Copia <code>NXSigningResource.res</code> para o diretório do projeto</li>
+    <li>Atualiza o <code>HintPath</code> no <code>.csproj</code> para o caminho do NX</li>
+    <li>Executa <code>dotnet build -c Release</code></li>
+    <li>Assina a DLL com <code>SignDotNet.exe</code></li>
+    <li>Copia a DLL, o <code>.men</code> e o <code>.rtb</code> para o diretório de deploy padrão (<code>%UGII_USER_DIR%\startup</code>)</li>
+</ol>
+
+<p><strong>Via linha de comando direta:</strong></p>
+<pre><code>dotnet build -c Release --nologo -v q
+SignDotNet.exe bin\Release\FlatPatternHighlight.dll</code></pre>
+
+<h3 id="instalacao-deploy">2.3 Deploy</h3>
+<p>Os arquivos necessários para a execução no NX são:</p>
+<table>
+    <tr><th>Arquivo</th><th>Destino</th><th>Função</th></tr>
+    <tr><td><code>FlatPatternHighlight.dll</code></td><td><code>startup\</code></td><td>Assembly principal (assinado)</td></tr>
+    <tr><td><code>FlatPatternHighlight.men</code></td><td><code>startup\</code></td><td>Registro no menu do NX</td></tr>
+    <tr><td><code>FlatPatternHighlight.rtb</code></td><td><code>startup\</code></td><td>Aba personalizada na Ribbon</td></tr>
+</table>
+
+<p>O diretório <code>startup</code> padrão é <code>%UGII_USER_DIR%\startup\</code>. Alternativamente, os arquivos podem ser copiados para o diretório <code>startup</code> da instalação do NX.</p>
+
+<h3 id="instalacao-execucao">2.4 Execução</h3>
+<p>Há três formas de executar o plugin:</p>
+<ol>
+    <li><strong>Menu:</strong> <em>Flat Pattern → Highlight Exterior Curves</em> (antes do menu Help)</li>
+    <li><strong>Ribbon:</strong> Aba "Flat Pattern" → Grupo "Highlight" → Botão "Highlight Exterior Curves"</li>
+    <li><strong>Ctrl+U:</strong> <em>File → Execute → NX Open</em> e selecione <code>FlatPatternHighlight.dll</code></li>
+</ol>
+</section>
+
+<hr>
+
+<!-- ================================================================== -->
+<!-- 3. REFERÊNCIA DE CLASSES & MÉTODOS                                 -->
+<!-- ================================================================== -->
+<section class="section-anchor" id="referencia">
+<h2>3. Referência de Classes &amp; Métodos</h2>
+
+<h3 id="ref-highlightflatpattern">3.1 Classe <code>HighlightFlatPattern</code></h3>
+<div class="info-box">
+    <strong>Namespace:</strong> <code>FlatPatternHighlight</code><br>
+    <strong>Assembly:</strong> <code>FlatPatternHighlight.dll</code><br>
+    <strong>Tipo:</strong> Classe pública estática
+</div>
+<p>
+    Classe principal do plugin. Contém toda a lógica de análise do flat pattern em 3 etapas,
+    além dos métodos utilitários, P/Invoke para chamadas nativas e criação de cotas PMI.
+    Não requer instância — todos os métodos são estáticos.
+</p>
+
+<hr style="margin:1.5rem 0;">
+
+<h3 id="ref-main">3.2 <code>Main()</code> — Entry Point</h3>
+<pre><code><span class="badge green">PUBLIC STATIC</span> int Main(string[] args)</code></pre>
+<p>
+    <strong>Descrição:</strong> Ponto de entrada principal. Chamado quando o usuário executa o plugin
+    via Ctrl+U, menu ou ribbon. Orquestra as 3 etapas sequenciais de análise.
+</p>
+<p><strong>Fluxo interno:</strong></p>
+<ol>
+    <li>Obtém a sessão NX ativa (<code>Session.GetSession()</code>) e a UI</li>
+    <li>Valida a existência de um <em>work part</em> ativo</li>
+    <li>Localiza a feature <code>FlatPattern</code> via <code>FindFlatPattern()</code></li>
+    <li>Executa <code>HighlightOuterPerimeter()</code> (Step 1)</li>
+    <li>Executa <code>HighlightBendCenterLines()</code> (Step 2)</li>
+    <li>Executa <code>AnalyzeBendToPerimeter()</code> (Step 3)</li>
+    <li>Remove highlights temporários</li>
+    <li>Retorna <code>0</code> em caso de sucesso</li>
+</ol>
+<p><strong>Tratamento de erros:</strong> Captura <code>NXException</code> e <code>Exception</code> genérica, exibindo
+mensagem em <code>NXMessageBox</code>.</p>
+
+<hr style="margin:1.5rem 0;">
+
+<h3 id="ref-step1">3.3 Step 1 — <code>HighlightOuterPerimeter()</code></h3>
+<pre><code><span class="badge orange">PRIVATE STATIC</span> void HighlightOuterPerimeter(
+    FlatPattern flatPattern,
+    Part workPart,
+    LogFile lw,
+    out List&lt;Curve&gt; outerPerim
+)</code></pre>
+<p>
+    <strong>Descrição:</strong> Filtra as curvas externas brutas obtidas de <code>GetExteriorCurves()</code>
+    para reter apenas o <strong>contorno externo verdadeiro</strong>, excluindo notches, recortes e furos.
+</p>
+<p><strong>Algoritmo:</strong></p>
+<ol>
+    <li>Obtém todas as curvas externas via <code>flatPattern.GetExteriorCurves()</code></li>
+    <li>Localiza o corpo sólido do flat pattern via <code>FindFlatSolidBody()</code> (3 estratégias)</li>
+    <li>Para cada face planar do corpo, chama <code>UF_MODL_ask_face_loops()</code> (P/Invoke)</li>
+    <li>Filtra apenas <em>outer loops</em> (tipo 1), descartando <em>inner loops</em> (tipo 2)</li>
+    <li>Cruzam-se as tags das arestas dos outer loops com as curvas exteriores</li>
+    <li>Fallback: se o corpo não for encontrado, usa todas as curvas exteriores</li>
+</ol>
+<p><strong>Parâmetros:</strong></p>
+<ul>
+    <li><code>flatPattern</code> — Feature FlatPattern a ser analisada</li>
+    <li><code>workPart</code> — Part ativa</li>
+    <li><code>lw</code> — LogFile do NX para diagnóstico</li>
+    <li><code>outerPerim</code> — Lista de saída com as curvas do perímetro externo</li>
+</ul>
+
+<hr style="margin:1.5rem 0;">
+
+<h3 id="ref-step2">3.4 Step 2 — <code>HighlightBendCenterLines()</code></h3>
+<pre><code><span class="badge orange">PRIVATE STATIC</span> void HighlightBendCenterLines(
+    FlatPattern flatPattern,
+    LogFile lw,
+    List&lt;Curve&gt; outerPerim,
+    out List&lt;Curve&gt; bendLines
+)</code></pre>
+<p>
+    <strong>Descrição:</strong> Recupera e destaca as linhas de centro de dobra (bend up e bend down).
+    As linhas são destacadas visualmente no NX e um atributo de usuário
+    <code>"FlatPatternHighlight" = "true"</code> é anexado a cada uma.
+</p>
+<p><strong>Parâmetros:</strong></p>
+<ul>
+    <li><code>flatPattern</code> — Feature FlatPattern</li>
+    <li><code>lw</code> — LogFile para saída de diagnóstico</li>
+    <li><code>outerPerim</code> — Perímetro externo (usado para detectar artefatos)</li>
+    <li><code>bendLines</code> — Lista de saída com todas as linhas de centro de dobra</li>
+</ul>
+<p><strong>Detalhes:</strong></p>
+<ul>
+    <li><code>GetBendUpCenterLines()</code> — linhas de centro de dobra para flanges que dobram para cima</li>
+    <li><code>GetBendDownCenterLines()</code> — linhas de centro de dobra para flanges que dobram para baixo</li>
+    <li>Linhas cujo midpoint 3D está a &lt; 0.5 mm do perímetro externo são puladas (artefatos)</li>
+</ul>
+
+<hr style="margin:1.5rem 0;">
+
+<h3 id="ref-step3">3.5 Step 3 — <code>AnalyzeBendToPerimeter()</code></h3>
+<pre><code><span class="badge orange">PRIVATE STATIC</span> void AnalyzeBendToPerimeter(
+    List&lt;Curve&gt; bendLines,
+    List&lt;Curve&gt; outerPerim,
+    LogFile lw,
+    Part workPart
+)</code></pre>
+<p>
+    <strong>Descrição:</strong> Para cada linha de centro de dobra, encontra a curva de perímetro
+    paralela mais próxima em cada lado (direção normal e oposta). Produz um log tabular
+    detalhado e cria cotas PMI em cadeia.
+</p>
+
+<h4>Detecção do plano do Flat Pattern</h4>
+<pre><code><span class="badge orange">PRIVATE STATIC</span> int DetectNormalAxis(
+    List&lt;Curve&gt; bendLines,
+    List&lt;Curve&gt; outerPerim
+)</code></pre>
+<p>
+    Mede o <em>spread</em> (amplitude) dos endpoints de todas as curvas nos eixos X, Y, Z.
+    O eixo com a <strong>menor amplitude</strong> é a normal do plano do flat pattern.
+    Retorna 0 (X-normal), 1 (Y-normal) ou 2 (Z-normal).
+</p>
+
+<h4>Rastreio de Múltiplos Candidatos por Lado</h4>
+<p>Para cada dobra, o algoritmo rastreia simultaneamente <strong>6 índices por lado</strong> (A = nml+, B = nml-):</p>
+<table>
+    <tr><th>Campo</th><th>Propósito</th></tr>
+    <tr><td><code>bestIdx / bestDist</code></td><td>Curva <strong>paralela</strong> mais próxima (com overlap). Pode ser um notch fino colado à dobra.</td></tr>
+    <tr><td><code>secondBestIdx / secondBestDist</code></td><td>2ª curva paralela mais próxima. Usada para detectar cutout: se <code>best/secondBest &lt; 0.3</code>, a "mais próxima" é um recorte fino e a segunda é a real.</td></tr>
+    <tr><td><code>farIdx / farDist</code></td><td>Curva paralela <strong>mais distante</strong> — normalmente a borda exterior real. Corrigido por SmallEdgeRatio.</td></tr>
+    <tr><td><code>nearIdx / nearDist</code></td><td>Curva mais próxima <strong>sem filtro de paralelismo</strong>. Fallback para dobras diagonais.</td></tr>
+    <tr><td><code>bestLineIdx / bestLineDist</code></td><td>Mesmo que bestIdx, mas restrito a objetos <code>Line</code> (ignora <code>Arc</code>).</td></tr>
+    <tr><td><code>farLineIdx / farLineDist</code></td><td>Mesmo que farIdx, mas restrito a <code>Line</code>. Preferido na dimensão PMI.</td></tr>
+</table>
+
+<h4>Correção SmallEdgeRatio</h4>
+<p>
+    Se o segmento mais distante (<code>farIdx</code>) tem comprimento &lt; 50% do segmento mais longo
+    (<code>longestIdx</code>), e a distância do mais longo é ≥ 50% da distância do mais distante,
+    então <code>farIdx</code> é substituído por <code>longestIdx</code>. Isso evita que notches de canto
+    pequenos (ex.: 3 mm de comprimento) sejam selecionados como borda exterior em vez do
+    segmento de borda verdadeiro (ex.: 400 mm).
+</p>
+
+<h4>Promoção Arc → Line para Dobras Diagonais</h4>
+<p>
+    Uma dobra é <strong>diagonal</strong> quando tem componente significativa em ambos os eixos UV
+    (<code>|dir.X| &gt; 0.2</code> E <code>|dir.Y| &gt; 0.2</code>). Essas dobras raramente têm uma
+    curva de perímetro com paralelismo perfeito (<code>|dot| ≥ 0.95</code>). O algoritmo:
+</p>
+<ol>
+    <li>Se <code>bestIdx</code> for <code>Arc</code> (fillet de canto), troca para <code>bestLineIdx</code> no mesmo lado</li>
+    <li>Se nenhum candidato paralelo foi encontrado, usa <code>nearIdx</code> como último recurso</li>
+</ol>
+
+<hr style="margin:1.5rem 0;">
+
+<h3 id="ref-pmi">3.6 Criação de Cotas PMI</h3>
+
+<h4><code>CreateChainDimensions()</code></h4>
+<pre><code><span class="badge orange">PRIVATE STATIC</span> int CreateChainDimensions(
+    Part workPart,
+    List&lt;bendInfo&gt; bendInfos,
+    List&lt;perimData&gt; perimData,
+    List&lt;Curve&gt; outerPerim,
+    double bboxMinU, double bboxMinV, double bboxMaxU, double bboxMaxV,
+    int uAxis, int vAxis, int normalAxis,
+    LogFile lw
+)</code></pre>
+<p>
+    <strong>Descrição:</strong> Ponto de entrada do dimensionamento em cadeia. Agrupa dobras paralelas
+    em grupos de direção, divide cada grupo em lanes independentes e delega a criação de cotas
+    para <code>CreateChainForGroup()</code>.
+</p>
+
+<h4><code>ClusterByRangeOverlap()</code></h4>
+<pre><code><span class="badge orange">PRIVATE STATIC</span> List&lt;List&lt;int&gt;&gt; ClusterByRangeOverlap(
+    List&lt;bendInfo&gt; bendInfos,
+    List&lt;int&gt; groupIdx,
+    int uAxis, int vAxis
+)</code></pre>
+<p>
+    <strong>Descrição:</strong> Divide um grupo de dobras paralelas em <strong>lanes</strong>
+    (abas/flanges independentes). Algoritmo em dois passos:
+</p>
+<ol>
+    <li><strong>Atribuição greedy:</strong> Projeta endpoints na direção de referência; coloca a dobra na
+        primeira lane que tenha sobreposição de range E comprimento similar (≥ 70%).</li>
+    <li><strong>Consolidação:</strong> Funde lanes que se sobrepõem após extensões de range, até convergência.</li>
+</ol>
+<p><strong>Threshold:</strong> <code>LaneLengthRatioThreshold = 0.7</code> — a dobra mais curta deve ter pelo menos 70% do
+comprimento da mais longa para pertencer à mesma lane.</p>
+
+<h4><code>CreateChainForGroup()</code></h4>
+<pre><code><span class="badge orange">PRIVATE STATIC</span> int CreateChainForGroup(
+    Part workPart,
+    List&lt;bendInfo&gt; bendInfos,
+    List&lt;int&gt; groupIdx,
+    List&lt;perimData&gt; perimData,
+    List&lt;Curve&gt; outerPerim,
+    double bboxMinU, double bboxMinV, double bboxMaxU, double bboxMaxV,
+    int uAxis, int vAxis, int normalAxis,
+    LogFile lw
+)</code></pre>
+<p>
+    <strong>Descrição:</strong> Para uma lane, projeta os midpoints na direção normal de referência,
+    classifica cada dobra como <em>lowSide</em> ou <em>highSide</em> (baseado na proximidade aos extremos
+    do bbox), ordena cada lado e chama <code>CreateChainSide()</code>.
+</p>
+
+<h4><code>CreateChainSide()</code></h4>
+<pre><code><span class="badge orange">PRIVATE STATIC</span> int CreateChainSide(
+    Part workPart,
+    List&lt;bendInfo&gt; bendInfos,
+    List&lt;(int idx, double offset, bool flipped)&gt; side,
+    List&lt;perimData&gt; perimData,
+    List&lt;Curve&gt; outerPerim,
+    bool isLowSide, int normalAxis,
+    double bboxMinU, double bboxMinV, double bboxMaxU, double bboxMaxV,
+    LogFile lw
+)</code></pre>
+<p>
+    <strong>Descrição:</strong> Cria as cotas PMI para um único lado de uma lane. Estrutura da cadeia:
+</p>
+<pre><code>[outer boundary] ←dim0→ [bend_0] ←dim1→ [bend_1] ←dim2→ ... ←dimN→ [bend_N]</code></pre>
+<p>
+    O <strong>boundary</strong> (borda exterior) é sempre o segmento paralelo mais distante (<code>farLineIdx</code>
+    preferencialmente, depois <code>farIdx</code>) no lado correto. A regra de lado é:
+</p>
+<ul>
+    <li><code>isLow=true,  flipped=false</code> → Lado B (nml−)</li>
+    <li><code>isLow=true,  flipped=true</code> → Lado A (nml+)</li>
+    <li><code>isLow=false, flipped=false</code> → Lado A (nml+)</li>
+    <li><code>isLow=false, flipped=true</code> → Lado B (nml−)</li>
+</ul>
+
+<h4><code>CreatePmiRapidDimension()</code></h4>
+<pre><code><span class="badge orange">PRIVATE STATIC</span> bool CreatePmiRapidDimension(
+    Part workPart,
+    Curve curveA, Point3d pickA,
+    Curve curveB, Point3d midB,
+    Point3d origin, int normalAxis,
+    LogFile lw
+)</code></pre>
+<p>
+    <strong>Descrição:</strong> Cria uma cota PMI perpendicular entre dois objetos <code>Curve</code>
+    usando <code>PmiRapidDimensionBuilder</code> com <code>MeasurementMethod.Perpendicular</code>.
+    O NX calcula a distância perpendicular geométrica verdadeira.
+</p>
+<p><strong>Cascata de Fallback:</strong></p>
+<table>
+    <tr><th>Ordem</th><th>Caminho</th><th>Condição</th></tr>
+    <tr><td>1</td><td>Cota PMI perpendicular (2 Curves, PmiRapidDimensionBuilder)</td><td>Caminho ideal</td></tr>
+    <tr><td>2</td><td>Indicator-line vermelha (cor 36) entre os pontos de pick</td><td>Erro 948802 (sem licença PMI/GD&amp;T)</td></tr>
+    <tr><td>3</td><td>Point-fallback: 2 pontos auxiliares blanked + cota Horizontal/Vertical</td><td>Outros erros do builder</td></tr>
+</table>
+
+<h4><code>CreatePmiPointFallbackDimension()</code></h4>
+<pre><code><span class="badge orange">PRIVATE STATIC</span> bool CreatePmiPointFallbackDimension(
+    Part workPart,
+    Point3d pointA, Point3d pointB,
+    Point3d origin, int normalAxis,
+    LogFile lw
+)</code></pre>
+<p>
+    <strong>Descrição:</strong> Fallback extremo: cria dois <code>Point</code>s auxiliares (blanked) e uma cota
+    horizontal/vertical entre eles. A direção é escolhida pelo eixo de maior variação entre os pontos.
+</p>
+
+<h4><code>CreateChainOrigin()</code></h4>
+<pre><code><span class="badge orange">PRIVATE STATIC</span> Point3d CreateChainOrigin(
+    Point3d pointA, Point3d pointB,
+    int level,
+    double bboxMinU, double bboxMinV, double bboxMaxU, double bboxMaxV,
+    int normalAxis
+)</code></pre>
+<p>
+    <strong>Descrição:</strong> Calcula a posição do texto da cota. As cotas são empilhadas fora do bbox
+    com margem base + espaçamento por nível. A direção de empilhamento depende de qual eixo (U ou V)
+    é dominante na medição.
+</p>
+
+<h4><code>FindFlatPatternView()</code></h4>
+<pre><code><span class="badge orange">PRIVATE STATIC</span> NXOpen.ModelingView FindFlatPatternView(Part workPart)</code></pre>
+<p>
+    <strong>Descrição:</strong> Localiza a <em>modeling view</em> do flat pattern (nome contém "FLAT") para
+    usar como contexto de view nas cotas PMI. Retorna a <em>work view</em> se não encontrar.
+</p>
+
+<hr style="margin:1.5rem 0;">
+
+<h3 id="ref-utils">3.7 Métodos Utilitários</h3>
+
+<h4><code>FindFlatSolidBody()</code></h4>
+<pre><code><span class="badge orange">PRIVATE STATIC</span> Body FindFlatSolidBody(
+    Part workPart,
+    FlatPattern flatPattern,
+    LogFile lw
+)</code></pre>
+<p>
+    <strong>Descrição:</strong> Localiza o corpo sólido do flat pattern usando 3 estratégias em ordem
+    de confiabilidade:
+</p>
+<ol>
+    <li><code>flatPattern.GetBodies()</code> — API oficial (pode retornar null em alguns casos)</li>
+    <li><code>flatPattern.GetEntities()</code> + cast para <code>Body</code></li>
+    <li>Iteração exaustiva em <code>workPart.Bodies</code> procurando feature <code>FlatPattern</code> ou <code>FlatSolid</code></li>
+</ol>
+
+<h4><code>FindFlatPattern()</code></h4>
+<pre><code><span class="badge orange">PRIVATE STATIC</span> FlatPattern FindFlatPattern(Part workPart)</code></pre>
+<p>
+    <strong>Descrição:</strong> Localiza a primeira feature <code>FlatPattern</code> na árvore de features da peça.
+    Retorna <code>null</code> se não existir.
+</p>
+
+<h4><code>GetEndPoints()</code></h4>
+<pre><code><span class="badge orange">PRIVATE STATIC</span> void GetEndPoints(
+    Curve curve,
+    out Point3d p1, out Point3d p2
+)</code></pre>
+<p>
+    <strong>Descrição:</strong> Obtém os pontos inicial e final de qualquer <code>Curve</code> (suporta
+    <code>Line</code> e <code>Arc</code>). Para arcos, calcula os endpoints a partir do centro, raio e
+    ângulos inicial/final.
+</p>
+
+<h4><code>ProjectPointOnSegment()</code></h4>
+<pre><code><span class="badge orange">PRIVATE STATIC</span> Point3d ProjectPointOnSegment(
+    Point3d point, Point3d segStart, Point3d segEnd
+)</code></pre>
+<p>
+    <strong>Descrição:</strong> Projeta um ponto sobre um segmento de reta (ponto mais próximo no segmento).
+    Usado para posicionar pontos de origem de cotas sobre curvas de boundary.
+</p>
+
+<h4><code>DistToBboxEdge()</code></h4>
+<pre><code><span class="badge orange">PRIVATE STATIC</span> double DistToBboxEdge(
+    double px, double py, double dx, double dy,
+    double bminX, double bminY, double bmaxX, double bmaxY
+)</code></pre>
+<p>
+    <strong>Descrição:</strong> Calcula a distância de um ponto (px, py) até a borda do bounding box
+    em uma direção (dx, dy) usando <em>ray-casting</em>. Retorna a menor distância paramétrica positiva
+    t ao longo do raio até qualquer face do bbox, ou -1 se não houver interseção.
+</p>
+
+<h4><code>HighlightObjects()</code></h4>
+<pre><code><span class="badge orange">PRIVATE STATIC</span> void HighlightObjects(List&lt;DisplayableObject&gt; objects)</code></pre>
+<p>
+    <strong>Descrição:</strong> Destaca todos os objetos da lista no NX (chama <code>Highlight()</code> em cada um).
+</p>
+
+<h4><code>UnhighlightObjects()</code></h4>
+<pre><code><span class="badge orange">PRIVATE STATIC</span> void UnhighlightObjects(IEnumerable&lt;Curve&gt; curves)</code></pre>
+<p>
+    <strong>Descrição:</strong> Remove o destaque visual de todos os objetos após a análise.
+</p>
+
+<hr style="margin:1.5rem 0;">
+
+<h3 id="ref-pinvoke">3.8 P/Invoke — UF_MODL (libufun.dll)</h3>
+<p>
+    O plugin utiliza <strong>P/Invoke</strong> para chamar funções nativas da biblioteca
+    <code>libufun.dll</code> do NX, necessárias porque a API gerenciada NXOpen não expõe
+    topologia de loops (outer vs inner loops) das faces.
+</p>
+<table>
+    <tr><th>Função Nativa</th><th>Assinatura Gerenciada</th><th>Propósito</th></tr>
+    <tr>
+        <td><code>UF_MODL_ask_face_loops</code></td>
+        <td><code>extern int UF_MODL_ask_face_loops(Tag face, out IntPtr loopList)</code></td>
+        <td>Obtém a lista de loops de uma face</td>
+    </tr>
+    <tr>
+        <td><code>UF_MODL_ask_loop_list_count</code></td>
+        <td><code>extern int UF_MODL_ask_loop_list_count(IntPtr loopList, out int count)</code></td>
+        <td>Conta loops na lista</td>
+    </tr>
+    <tr>
+        <td><code>UF_MODL_ask_loop_list_item</code></td>
+        <td><code>extern int UF_MODL_ask_loop_list_item(IntPtr loopList, int index, out int type, out IntPtr edgeList)</code></td>
+        <td>Recupera um loop específico (type 1 = outer, 2 = inner)</td>
+    </tr>
+    <tr>
+        <td><code>UF_MODL_ask_list_count</code></td>
+        <td><code>extern int UF_MODL_ask_list_count(IntPtr list, out int count)</code></td>
+        <td>Conta itens em lista genérica</td>
+    </tr>
+    <tr>
+        <td><code>UF_MODL_ask_list_item</code></td>
+        <td><code>extern int UF_MODL_ask_list_item(IntPtr list, int index, out Tag tag)</code></td>
+        <td>Obtém tag de item por índice</td>
+    </tr>
+    <tr>
+        <td><code>UF_MODL_delete_loop_list</code></td>
+        <td><code>extern int UF_MODL_delete_loop_list(ref IntPtr loopList)</code></td>
+        <td>Libera a memória alocada pela UF_MODL_ask_face_loops</td>
+    </tr>
+</table>
+<div class="info-box warn">
+    <strong>Atenção:</strong> Chamadas P/Invoke devem ser envolvidas entre
+    <code>JAM.StartUFCall("FlatPatternHighlight")</code> e <code>JAM.EndUFCall()</code> para garantir
+    consistência do contexto NX.
+</div>
+
+<hr style="margin:1.5rem 0;">
+
+<h3 id="ref-lifecycle">3.9 Ciclo de Vida NX</h3>
+
+<h4><code>GetUnloadOption()</code></h4>
+<pre><code><span class="badge green">PUBLIC STATIC</span> int GetUnloadOption(string arg)</code></pre>
+<p>
+    <strong>Descrição:</strong> Retorna <code>Session.LibraryUnloadOption.Immediately</code> — a DLL pode
+    ser descarregada imediatamente após a execução da ação. Método obrigatório para plugins NX.
+</p>
+
+<h4><code>Startup()</code></h4>
+<pre><code><span class="badge green">PUBLIC STATIC</span> int Startup(string[] args)</code></pre>
+<p>
+    <strong>Descrição:</strong> Chamado pelo NX quando a DLL é carregada na inicialização da sessão
+    (requer assembly assinado). O arquivo <code>.men</code> utiliza a sintaxe
+    <code>ACTIONS NXOpen::Namespace.Class::Method</code>, que resolve a ação diretamente sem
+    precisar de <code>AddMenuAction()</code>.
+</p>
+</section>
+
+<hr>
+
+<!-- ================================================================== -->
+<!-- 4. EXEMPLOS DE USO                                                 -->
+<!-- ================================================================== -->
+<section class="section-anchor" id="exemplos">
+<h2>4. Exemplos de Uso</h2>
+
+<h3 id="exemplo-basico">4.1 Execução Básica (Ctrl+U)</h3>
+<p><strong>Cenário:</strong> Uma peça de Sheet Metal com um flat pattern já gerado.</p>
+<ol>
+    <li>Abra a peça no NX 2512</li>
+    <li>Vá em <em>File → Execute → NX Open</em> (ou pressione <strong>Ctrl+U</strong>)</li>
+    <li>Selecione <code>FlatPatternHighlight.dll</code></li>
+    <li>O plugin executa as 3 etapas e escreve o log diagnóstico</li>
+    <li>Verifique o resultado em <em>Help → Log File</em></li>
+</ol>
+
+<p><strong>Exemplo de saída no Log File:</strong></p>
+<pre><code>=== FlatPatternHighlight Diagnostic Log ===
+Part: 9300047324_C.prt
+
+--- Outer Perimeter (True External Boundary) ---
+  Total exterior curves (raw): 74
+  [diag] flatPattern.GetBodies() count: 1
+  Body via GetBodies(): 123456
+  Flat body faces: 12
+  Outer loop edge tags: 48
+  Outer perimeter curves: 22
+  Inner (excluded): 52
+
+--- Bend Center Lines ---
+  [Bend Up]
+    [ 0] Tag=234567  Len=  337.45  UP
+    [ 1] Tag=234568  Len=  271.22  UP
+  [Bend Down]
+    [ 0] Tag=345678  Len=  337.45  DOWN
+    [ 1] Tag=345679  Len=  271.22  DOWN
+  Total bend lines: 4 (2 up, 2 down)
+
+--- Bend Line → Nearest Perimeter (Parallel) ---
+  [diag] Flat pattern plane: normal=Z  u=X  v=Y
+  [diag] Non-Line/Arc perimeter curves: 6 / 22
+  Overall bbox: (50.0,30.0)-(450.0,380.0)
+  Bbox center: (250.0,205.0)
+
+  Bend[0] Tag=234567  Mid=(123.4,56.7)  Dir=(1.000,0.000)  Len=337.5
+    Side A (nml+): nearest=   29.85  bboxDist=  180.15  perimTag=456789
+                   2ndNearest=   22.85  perimTag=456790
+                   farthest  =  380.00  perimTag=456791  segLen=400.0
+    Side B (nml-): nearest=    2.85  bboxDist=  177.30  perimTag=456792
+                   2ndNearest=   22.85  perimTag=456793
+                   farthest  =   30.15  perimTag=456794  segLen=400.0
+
+  PMI dimensions created: 4
+=== End of Diagnostic Log ===
+</code></pre>
+
+<h3 id="exemplo-log">4.2 Interpretação do Log File</h3>
+<table>
+    <tr><th>Campo</th><th>O que significa</th></tr>
+    <tr><td><code>Outer perimeter curves: 22</code></td><td>Das 74 curvas brutas, 22 pertencem ao contorno externo verdadeiro</td></tr>
+    <tr><td><code>Inner (excluded): 52</code></td><td>52 curvas são de notches, recortes ou furos internos</td></tr>
+    <tr><td><code>Bend[0] ... Dir=(1.000,0.000)</code></td><td>Direção da dobra no plano UV (horizontal)</td></tr>
+    <tr><td><code>nearest=29.85</code></td><td>Curva paralela mais próxima a 29.85 mm da dobra no lado A</td></tr>
+    <tr><td><code>farthest=380.00</code></td><td>Curva paralela mais distante — provável borda exterior</td></tr>
+    <tr><td><code>bboxDist=180.15</code></td><td>Distância da dobra até a borda do bounding box no lado A</td></tr>
+    <tr><td><code>2ndNearest=22.85</code></td><td>Segunda curva mais próxima; se nearest &lt; 0.3 × secondNearest, a nearest é um cutout</td></tr>
+</table>
+
+<h3 id="exemplo-pmi">4.3 Cotas PMI em Cadeia</h3>
+<p>
+    O Step 3 cria opcionalmente cotas PMI em cadeia. A estrutura gerada é:
+</p>
+<pre><code>[borda exterior] ←dim0→ [dobra_0] ←dim1→ [dobra_1] ←dim2→ ... ←dimN→ [dobra_N]</code></pre>
+<p>Para cada aba (lane), duas cadeias são criadas — uma para o lado <em>low</em> e outra para o lado <em>high</em>.</p>
+
+<p><strong>Exemplo visual da cadeia em uma aba simples:</strong></p>
+<pre><code>  ┌─────────────────────────────────────────────────┐
+  │                  BORDA EXTERIOR                  │
+  │                      |                           │
+  │                  dim0 (29.85 mm)                 │
+  │                      |                           │
+  │              ┌─────── dobra_0 ───────┐           │
+  │              |                        |          │
+  │          dim1 (22.85 mm)          dim1 (...)     │
+  │              |                        |          │
+  │       ┌───── dobra_1 ─────┐    ┌──── dobra_1     │
+  │       |                   |    |                  │
+  │    dim2 (...)          dim2   dim2               │
+  │       |                   |    |                  │
+  │    dobra_2             dobra_2 dobra_2           │
+  └─────────────────────────────────────────────────┘</code></pre>
+
+<h3 id="exemplo-men">4.4 Menu &amp; Ribbon</h3>
+<p><strong>Arquivo <code>.men</code> — Registro no Menu:</strong></p>
+<pre><code>VERSION 120
+EDIT UG_GATEWAY_MAIN_MENUBAR
+BEFORE UG_HELP
+CASCADE_BUTTON FLAT_PATTERN_MENU
+LABEL Flat Pattern
+END_OF_BEFORE
+
+MENU FLAT_PATTERN_MENU
+BUTTON FLAT_PATTERN_HIGHLIGHT
+LABEL Highlight Exterior Curves
+ACTIONS NXOpen::FlatPatternHighlight.HighlightFlatPattern::Main
+END_OF_MENU</code></pre>
+
+<p><strong>Arquivo <code>.rtb</code> — Aba na Ribbon:</strong></p>
+<pre><code>TITLE  Flat Pattern
+VERSION 170
+
+BEGIN_GROUP FLAT_PATTERN_GROUP
+LABEL Highlight
+
+    BUTTON  FLAT_PATTERN_HIGHLIGHT
+    RIBBON_STYLE  ALWAYS_MEDIUM_IMAGE_AND_TEXT
+
+END_GROUP</code></pre>
+
+<div class="info-box">
+    <strong>Nota:</strong> A sintaxe <code>ACTIONS NXOpen::Namespace.Class::Method</code> (disponível desde
+    NX 12) instrui o NX a chamar diretamente o método estático <code>Main</code> sem necessidade de
+    <code>AddMenuAction()</code> ou assembly assinado com <code>Startup()</code>.
+</div>
+</section>
+
+<hr>
+
+<!-- ================================================================== -->
+<!-- 5. ALGORITMOS EM DETALHE                                          -->
+<!-- ================================================================== -->
+<section class="section-anchor" id="algoritmos">
+<h2>5. Algoritmos em Detalhe</h2>
+
+<h3 id="algo-perimeter">5.1 Outer Perimeter Filtering</h3>
+<p>
+    O algoritmo de filtragem do perímetro externo resolve o problema de que
+    <code>GetExteriorCurves()</code> retorna <strong>todas</strong> as curvas da borda do flat pattern,
+    incluindo contornos de notches, cutouts, alívios e furos. Apenas as curvas que pertencem
+    a <strong>outer loops</strong> (loops externos) das faces planares do corpo sólido devem ser
+    consideradas como "verdadeiro perímetro externo".
+</p>
+<p><strong>Estratégia:</strong></p>
+<ol>
+    <li>Localiza o corpo sólido do flat pattern via <code>FindFlatSolidBody()</code> (3 estratégias)</li>
+    <li>Para cada <strong>face planar</strong> do corpo, chama <code>UF_MODL_ask_face_loops()</code> (P/Invoke)</li>
+    <li>Filtra apenas loops do tipo 1 (outer loop). Loops tipo 2 (inner loop) são descartados</li>
+    <li>Coleciona as tags de todas as arestas dos outer loops em um <code>HashSet&lt;Tag&gt;</code></li>
+    <li>Cruza as tags com as curvas exteriores: se <code>ed.FlatSolidObject.Tag</code> está no set, a curva é mantida</li>
+    <li>Se o corpo não for encontrado, usa todas as curvas (fallback)</li>
+</ol>
+
+<h3 id="algo-bend">5.2 Bend-to-Perimeter Proximity</h3>
+<p>
+    Para cada linha de centro de dobra, o algoritmo realiza as seguintes operações:
+</p>
+<ol>
+    <li><strong>Detecta o plano do flat pattern</strong> via <code>DetectNormalAxis()</code> — mede o spread dos endpoints em cada eixo; o eixo de menor spread é a normal.</li>
+    <li><strong>Calcula o bounding box 2D</strong> no plano UV (coordenadas do flat pattern).</li>
+    <li><strong>Para cada dobra:</strong>
+        <ol>
+            <li>Calcula direção unitária (<code>dir</code>) e normal perpendicular (<code>nml</code>) no plano UV.</li>
+            <li>Pula artefatos: midpoints 3D a &lt; 0.5 mm do perímetro.</li>
+            <li>Scan em todas as curvas de perímetro: calcula projeção na normal para determinar lado (A = nml+, B = nml-).</li>
+            <li>Aplica filtro de paralelismo (<code>|dot| ≥ 0.95</code>) + filtro de overlap.</li>
+            <li>Rastreia 6 candidatos por lado simultaneamente.</li>
+            <li>Aplica correção SmallEdgeRatio.</li>
+            <li>Para dobras diagonais, aplica promoção Arc→Line.</li>
+            <li>Calcula distância ao bbox via ray-casting.</li>
+        </ol>
+    </li>
+</ol>
+
+<h3 id="algo-lane">5.3 Lane Clustering</h3>
+<p>
+    <strong>Problema:</strong> Uma peça pode ter múltiplas abas paralelas (ex.: abas esquerda e direita
+    de uma dobra em U). Cada aba precisa de sua própria cadeia de cotas.
+</p>
+<p><strong>Solução:</strong> Algoritmo de clustering em 2 passos:</p>
+<ol>
+    <li><strong>Atribuição greedy:</strong>
+        <ul>
+            <li>Projeta os endpoints de cada dobra na direção de referência do grupo</li>
+            <li>Obtém o intervalo [lo, hi] da projeção</li>
+            <li>Coloca a dobra na primeira lane que tenha:
+                <ul>
+                    <li>Sobreposição de range com [lo, hi]</li>
+                    <li>Comprimento similar (ratio ≥ 0.7)</li>
+                </ul>
+            </li>
+            <li>Se nenhuma lane combinar, cria uma nova lane</li>
+        </ul>
+    </li>
+    <li><strong>Consolidação:</strong> Funde lanes que se sobrepõem após extensões de range, até convergência.</li>
+</ol>
+
+<h3 id="algo-chain">5.4 Chain PMI Dimensioning</h3>
+<p>
+    A criação de cotas PMI segue uma hierarquia de decisões:
+</p>
+<ol>
+    <li><strong>Agrupa dobras paralelas</strong> em grupos de direção (<code>|dot| ≥ 0.95</code>).</li>
+    <li><strong>Divide cada grupo em lanes</strong> via <code>ClusterByRangeOverlap()</code>.</li>
+    <li><strong>Para cada lane:</strong>
+        <ol>
+            <li>Classifica dobras em <em>lowSide</em> e <em>highSide</em> pela projeção na normal de referência.</li>
+            <li>Ordena lowSide ASC, highSide DESC.</li>
+            <li>Para cada lado, chama <code>CreateChainSide()</code>.</li>
+        </ol>
+    </li>
+    <li><strong>CreateChainSide():</strong>
+        <ol>
+            <li>Seleciona boundary (borda exterior) pelo farLineIdx/farIdx do lado correto.</li>
+            <li>Cria cota boundary → primeira dobra.</li>
+            <li>Cria cotas entre dobras consecutivas.</li>
+        </ol>
+    </li>
+    <li><strong>Cada cota</strong> é criada via <code>PmiRapidDimensionBuilder</code> com fallbacks para indicator-line e point-fallback.</li>
+</ol>
+
+<p><strong>Seleção do Boundary — Regra de Lado:</strong></p>
+<table>
+    <tr><th>isLowSide</th><th>flipped</th><th>Lado Externo</th><th>Uso</th></tr>
+    <tr><td>true</td><td>false</td><td>B (nml−)</td><td>farLineIdxB → farIdxB</td></tr>
+    <tr><td>true</td><td>true</td><td>A (nml+)</td><td>farLineIdxA → farIdxA</td></tr>
+    <tr><td>false</td><td>false</td><td>A (nml+)</td><td>farLineIdxA → farIdxA</td></tr>
+    <tr><td>false</td><td>true</td><td>B (nml−)</td><td>farLineIdxB → farIdxB</td></tr>
+</table>
+</section>
+
+<hr>
+
+<!-- ================================================================== -->
+<!-- 6. LIMITAÇÕES CONHECIDAS                                          -->
+<!-- ================================================================== -->
+<section class="section-anchor" id="limitacoes">
+<h2>6. Limitações Conhecidas</h2>
+
+<div class="info-box err">
+    <strong>⚠ Importante:</strong> As limitações abaixo são conhecidas e algumas estão em análise para versões futuras.
+</div>
+
+<table>
+    <tr><th>Limitação</th><th>Descrição</th><th>Impacto</th></tr>
+    <tr>
+        <td>Flat solid body não localizado</td>
+        <td>Em algumas peças, <code>GetBodies()</code> e <code>GetEntities()</code> retornam null/vazio. A 3ª estratégia (busca exaustiva) pode falhar se a feature <code>FlatSolid</code> não estiver exposta.</td>
+        <td>Fallback: todas as curvas externas são usadas (incluindo notches).</td>
+    </tr>
+    <tr>
+        <td>Artefatos em GetBendCenterLines</td>
+        <td>Algumas configurações de flat pattern retornam arestas de perímetro através das APIs de bend center lines.</td>
+        <td>Heurística de skip por midpoint (0.5 mm do perímetro) resolve a maioria dos casos.</td>
+    </tr>
+    <tr>
+        <td>PmiRapidDimension exige Line</td>
+        <td><code>PmiRapidDimensionBuilder</code> com <code>MeasurementMethod.Perpendicular</code> exige uma <code>Line</code> como 1ª referência. Arcs causam erro NX 1175009.</td>
+        <td>Indicator-line vermelha é usada como fallback (sem cota numérica).</td>
+    </tr>
+    <tr>
+        <td>Licença PMI/GD&amp;T</td>
+        <td>Sem a licença, o builder retorna erro 948802.</td>
+        <td>Indicator-lines vermelhas substituem as cotas.</td>
+    </tr>
+    <tr>
+        <td>Dobras diagonais</td>
+        <td>Dobras com componente significativa em ambos os eixos UV têm poucos candidatos paralelos.</td>
+        <td>Fallback para <code>nearIdx</code> (curva mais próxima sem filtro de paralelismo).</td>
+    </tr>
+    <tr>
+        <td>Cobertura de curvas não-Line/Arc</td>
+        <td>O método <code>GetEndPoints()</code> retorna (0,0,0) para tipos de curva não suportados.</td>
+        <td>Essas curvas são ignoradas na análise de proximidade.</td>
+    </tr>
+</table>
+</section>
+
+<hr>
+
+<!-- ================================================================== -->
+<!-- 7. CHANGELOG                                                       -->
+<!-- ================================================================== -->
+<section class="section-anchor" id="changelog">
+<h2>7. Changelog</h2>
+
+<p>Histórico de evolução do <strong>FlatPatternHighlight</strong>.</p>
+
+<h3>[Unreleased]</h3>
+<p><strong>Adicionado:</strong></p>
+<ul>
+    <li>Documentação refinada — comentários inline detalhados nas heurísticas críticas</li>
+    <li>Estrutura da tupla <code>bendInfos</code> (23 campos) documentada campo a campo</li>
+    <li>Tracking de múltiplos candidatos com explicação do <em>porquê</em> de cada um</li>
+    <li>Heurística de skip de cutout (ratio 0.3) explicada</li>
+    <li>Fallback de dobras diagonais (threshold 0.2) explicado</li>
+    <li>Correção small-edge (<code>SmallEdgeRatio = 0.5</code>) explicada</li>
+    <li>Cascata de fallback PMI documentada nos catch blocks</li>
+</ul>
+
+<h3>[0.4.0] — 2026-06-26</h3>
+<p><strong>Corrigido:</strong></p>
+<ul>
+    <li>Erro de compilação: variável <code>boundaryIdx</code> usada sem declaração</li>
+    <li>Erro de compilação: <code>outerPerim</code> referenciado em <code>CreateChainSide</code> sem ser parâmetro</li>
+</ul>
+<p><strong>Alterado:</strong></p>
+<ul>
+    <li>Unificação da seleção de boundary — todos os bends usam o mesmo método "nearest corrected cross-side"</li>
+    <li>Skip de cutout: se <code>best/secondBest &lt; 0.3</code>, troca para <code>secondBest</code></li>
+    <li>Preferência <code>Line</code> sobre <code>Arc</code> (Arc causa erro NX 1175009)</li>
+    <li>Fallback final para <code>nearIdx</code></li>
+</ul>
+
+<h3>[0.3.0] — 2026-06-26</h3>
+<p>Evolução iterativa do tratamento de <strong>dobras diagonais</strong> — várias tentativas até chegar ao comportamento estável.</p>
+<p><strong>Resultado:</strong> Dobras diagonais relaxam o filtro de paralelismo; preferem <code>Line</code> paralela, caem para <code>nearIdx</code> como último recurso.</p>
+<p><strong>Removido:</strong> Bridge dimension — removido por ser redundante.</p>
+
+<h3>[0.2.0] — 2026-06-26</h3>
+<p><strong>Adicionado:</strong></p>
+<ul>
+    <li><code>PmiRapidDimensionBuilder</code> para cotas PMI em cadeia</li>
+    <li>Cascata de fallback (indicator-line → point-fallback)</li>
+    <li>Skip de artefato de perímetro (midpoint a &lt; 0.5 mm)</li>
+</ul>
+<p><strong>Corrigido:</strong> Dobras inclinadas agora recebem cota via fallback de perímetro mais próximo.</p>
+
+<h3>[0.1.0] — 2026-06-24</h3>
+<p>Versão inicial do plugin — análise em 3 etapas sequenciais.</p>
+<p><strong>Adicionado:</strong></p>
+<ul>
+    <li>Step 1 — Outer Perimeter Filtering via P/Invoke UF_MODL_ask_face_loops</li>
+    <li>Step 2 — Bend Center Lines</li>
+    <li>Step 3 — Bend-to-Perimeter Proximity com lane clustering e chain PMI dimensioning inicial</li>
+    <li>Arquivos de menu (.men) e ribbon (.rtb)</li>
+    <li>Script de build (build.ps1)</li>
+    <li>README completo</li>
+</ul>
+</section>
+
+<hr>
+
+<footer style="text-align:center;color:var(--fg-dim);font-size:.85rem;margin-top:3rem;padding-top:1.5rem;border-top:1px solid var(--border);">
+    <p>FlatPatternHighlight — Documentação Técnica &nbsp;|&nbsp; Gerada em 2026-06-28 &nbsp;|&nbsp;
+    <a href="#toc">↑ Voltar ao Índice</a></p>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="generator" content="FlatPatternHighlight User Guide">
+    <title>FlatPatternHighlight — Guia do Usuário</title>
+    <style>
+        :root {
+            --bg: #1e1e2e;
+            --bg-card: #282840;
+            --bg-code: #1a1a2e;
+            --fg: #e0e0e0;
+            --fg-dim: #a0a0b0;
+            --accent: #7c9bff;
+            --accent2: #ff9e64;
+            --accent3: #9ece6a;
+            --border: #3a3a5c;
+            --warning: #e5a83e;
+            --error: #f7768e;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--fg);
+            line-height: 1.7;
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 2rem 1.5rem 4rem;
+        }
+        h1, h2, h3, h4 { color: var(--accent); font-weight: 600; letter-spacing: -0.01em; }
+        h1 { font-size: 2.2rem; border-bottom: 2px solid var(--border); padding-bottom: .5rem; margin-bottom: 1.5rem; }
+        h2 { font-size: 1.5rem; margin-top: 2.5rem; margin-bottom: 1rem; }
+        h3 { font-size: 1.2rem; margin-top: 1.8rem; color: var(--accent2); }
+        h4 { font-size: 1.05rem; margin-top: 1.2rem; color: var(--accent3); }
+        p, li { margin-bottom: .6rem; }
+        a { color: var(--accent); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+
+        .toc { background: var(--bg-card); border-radius: 10px; padding: 1.2rem 1.5rem; margin-bottom: 2rem; border: 1px solid var(--border); }
+        .toc h2 { margin: 0 0 .6rem; font-size: 1.2rem; border: none; }
+        .toc ul { list-style: none; padding-left: 0; }
+        .toc li { margin-bottom: .25rem; }
+        .toc a { font-size: .92rem; }
+        .toc ul ul { padding-left: 1.2rem; }
+
+        .info-box { background: var(--bg-card); border-left: 4px solid var(--accent); border-radius: 8px; padding: 1rem 1.2rem; margin: 1rem 0; }
+        .info-box.warn { border-left-color: var(--warning); }
+        .info-box.err { border-left-color: var(--error); }
+        .info-box.ok { border-left-color: var(--accent3); }
+
+        pre {
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem 1.2rem;
+            overflow-x: auto;
+            font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+            font-size: .85rem;
+            line-height: 1.5;
+            tab-size: 4;
+        }
+        code {
+            background: var(--bg-code);
+            padding: .1em .4em;
+            border-radius: 4px;
+            font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+            font-size: .88em;
+        }
+        pre code { background: none; padding: 0; border-radius: 0; }
+
+        table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: .9rem; }
+        th, td { border: 1px solid var(--border); padding: .5rem .8rem; text-align: left; }
+        th { background: var(--bg-card); color: var(--accent); font-weight: 600; }
+        tr:nth-child(even) { background: rgba(255,255,255,.02); }
+
+        .badge {
+            display: inline-block;
+            background: var(--accent);
+            color: #fff;
+            font-size: .7rem;
+            font-weight: 600;
+            padding: .15em .7em;
+            border-radius: 20px;
+            text-transform: uppercase;
+            letter-spacing: .03em;
+        }
+        .badge.green { background: var(--accent3); }
+        .badge.orange { background: var(--accent2); }
+        .badge.red { background: var(--error); }
+
+        .step {
+            counter-increment: step-counter;
+            margin-bottom: 1.5rem;
+            padding-left: 2.5rem;
+            position: relative;
+        }
+        .step::before {
+            content: counter(step-counter);
+            position: absolute;
+            left: 0;
+            top: 0;
+            background: var(--accent);
+            color: #fff;
+            width: 1.8rem;
+            height: 1.8rem;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: .9rem;
+        }
+        .step-list { counter-reset: step-counter; list-style: none; padding-left: 0; }
+
+        .section-anchor { scroll-margin-top: 1rem; }
+        hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+
+        .img-placeholder {
+            background: var(--bg-card);
+            border: 1px dashed var(--border);
+            border-radius: 8px;
+            padding: 2rem;
+            text-align: center;
+            color: var(--fg-dim);
+            margin: 1rem 0;
+            font-style: italic;
+        }
+
+        @media (max-width: 700px) {
+            body { padding: 1rem; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ================================================================== -->
+<!-- HEADER                                                             -->
+<!-- ================================================================== -->
+<h1>🔧 FlatPatternHighlight — Guia do Usuário</h1>
+<p style="font-size:1.1rem;color:var(--fg-dim);margin-bottom:1.8rem;">
+    Como instalar, configurar e utilizar o plugin de análise de <em>flat pattern</em>
+    para Siemens NX 2512.
+</p>
+
+<div class="info-box ok" style="margin-bottom:2rem;">
+    <strong>🎯 Público-alvo:</strong> Usuários finais do NX que trabalham com peças de Sheet Metal
+    e precisam analisar flat patterns de forma automatizada. <em>Não é necessário conhecimento de programação.</em>
+</div>
+
+<!-- ================================================================== -->
+<!-- TABLE OF CONTENTS                                                  -->
+<!-- ================================================================== -->
+<nav class="toc" id="toc">
+    <h2>📑 O que você vai encontrar</h2>
+    <ul>
+        <li><a href="#visao-geral">1. Visão Geral</a>
+            <ul>
+                <li><a href="#problema">O problema que o plugin resolve</a></li>
+                <li><a href="#funciona">Como funciona</a></li>
+            </ul>
+        </li>
+        <li><a href="#instalacao">2. Instalação</a>
+            <ul>
+                <li><a href="#requisitos">Requisitos</a></li>
+                <li><a href="#copiar-arquivos">Copiar os arquivos</a></li>
+                <li><a href="#verificar">Verificar a instalação</a></li>
+            </ul>
+        </li>
+        <li><a href="#executando">3. Executando o Plugin</a>
+            <ul>
+                <li><a href="#pelo-menu">Pelo Menu</a></li>
+                <li><a href="#pela-ribbon">Pela Ribbon (Faixa de Opções)</a></li>
+                <li><a href="#ctrl-u">Pelo Ctrl+U</a></li>
+            </ul>
+        </li>
+        <li><a href="#entendendo">4. Entendendo o Resultado</a>
+            <ul>
+                <li><a href="#log-file">Onde encontrar o Log File</a></li>
+                <li><a href="#lendo-log">Como ler o log</a></li>
+                <li><a href="#highlights">O que os destaques significam</a></li>
+                <li><a href="#cotas-pmi">Cotas PMI geradas</a></li>
+            </ul>
+        </li>
+        <li><a href="#exemplos">5. Exemplos Práticos</a>
+            <ul>
+                <li><a href="#ex1">Exemplo 1: Peça simples com 2 dobras</a></li>
+                <li><a href="#ex2">Exemplo 2: Peça complexa com recortes</a></li>
+                <li><a href="#ex3">Exemplo 3: Diagnóstico de problemas</a></li>
+            </ul>
+        </li>
+        <li><a href="#dicas">6. Dicas &amp; Boas Práticas</a></li>
+        <li><a href="#faq">7. Perguntas Frequentes (FAQ)</a></li>
+        <li><a href="#suporte">8. Suporte &amp; Contato</a></li>
+    </ul>
+</nav>
+
+<!-- ================================================================== -->
+<!-- 1. VISÃO GERAL                                                     -->
+<!-- ================================================================== -->
+<section class="section-anchor" id="visao-geral">
+<h2>1. Visão Geral</h2>
+
+<p>
+    O <strong>FlatPatternHighlight</strong> é uma ferramenta gratuita que roda dentro do
+    <strong>Siemens NX 2512</strong> e ajuda você a analisar automaticamente o <em>flat pattern</em>
+    (padrão plano) de peças de chapa dobrada (Sheet Metal).
+</p>
+
+<h3 id="problema">🔴 O problema que o plugin resolve</h3>
+<p>
+    Quando você cria um flat pattern de uma peça de Sheet Metal no NX, o sistema gera
+    dezenas de curvas e linhas. O problema é que:
+</p>
+<ul>
+    <li>O comando <strong>GetExteriorCurves</strong> retorna <strong>74+ curvas</strong> — mas a maioria
+        são de <strong>recortes, furos e alívios</strong>, não o contorno externo real.</li>
+    <li>Você precisa saber a <strong>distância de cada dobra até a borda da peça</strong>, mas
+        fazer isso manualmente é tedioso e propenso a erro.</li>
+    <li>Identificar visualmente qual lado de cada dobra aponta para a borda externa é
+        trabalhoso em peças com muitas dobras.</li>
+</ul>
+
+<h3 id="funciona">🟢 Como funciona</h3>
+<p>O plugin executa <strong>3 etapas automáticas</strong> em sequência:</p>
+
+<table>
+    <tr><th>Etapa</th><th>O que faz</th><th>Resultado</th></tr>
+    <tr>
+        <td><strong>1. Perímetro Externo</strong></td>
+        <td>Filtra as curvas externas brutas e mantém <em>apenas</em> o contorno verdadeiro da peça, eliminando recortes e furos.</td>
+        <td>Lista limpa de curvas do perímetro externo, destacadas na tela.</td>
+    </tr>
+    <tr>
+        <td><strong>2. Linhas de Centro</strong></td>
+        <td>Localiza todas as linhas de centro de dobra (tanto as de dobra para cima quanto para baixo).</td>
+        <td>Lista completa de linhas de centro, destacadas na tela.</td>
+    </tr>
+    <tr>
+        <td><strong>3. Análise de Proximidade</strong></td>
+        <td>Para cada dobra, calcula a distância até a curva de perímetro mais próxima de cada lado. Gera um relatório completo e, se possível, cria cotas PMI em cadeia.</td>
+        <td>Log detalhado + cotas PMI opcionais.</td>
+    </tr>
+</table>
+
+<div class="info-box ok">
+    <strong>⏱ Tempo de execução típico:</strong> Entre 1 e 5 segundos, dependendo da complexidade da peça.
+</div>
+</section>
+
+<hr>
+
+<!-- ================================================================== -->
+<!-- 2. INSTALAÇÃO                                                      -->
+<!-- ================================================================== -->
+<section class="section-anchor" id="instalacao">
+<h2>2. Instalação</h2>
+
+<h3 id="requisitos">📋 Requisitos</h3>
+<table>
+    <tr><th>Item</th><th>Exigência</th></tr>
+    <tr><td>Siemens NX</td><td>Versão <strong>2512</strong> ou superior (licença Sheet Metal obrigatória)</td></tr>
+    <tr><td>Licença PMI/GD&amp;T</td><td>Opcional — necessária apenas para gerar cotas PMI automáticas</td></tr>
+    <tr><td>Sistema Operacional</td><td>Windows 10 ou 11 (64 bits)</td></tr>
+    <tr><td>Permissão</td><td>Acesso de escrita ao diretório <code>startup</code> do NX</td></tr>
+</table>
+
+<h3 id="copiar-arquivos">📂 Copiar os arquivos</h3>
+<p>A instalação é simples: você só precisa copiar <strong>3 arquivos</strong> para a pasta
+<code>startup</code> do NX.</p>
+
+<div class="step-list">
+    <div class="step">
+        <strong>Localize a pasta correta</strong>
+        <p>O NX procura plugins na pasta:</p>
+        <pre><code>%UGII_USER_DIR%\startup\</code></pre>
+        <p>Geralmente este caminho é algo como:</p>
+        <pre><code>C:\Users\SeuNome\AppData\Roaming\Siemens\NX2512\startup\</code></pre>
+        <p>Se a pasta <code>startup</code> não existir, <strong>crie-a</strong>.</p>
+    </div>
+
+    <div class="step">
+        <strong>Copie os 3 arquivos</strong>
+        <p>Copie estes arquivos para a pasta <code>startup\</code>:</p>
+        <table>
+            <tr><th>Arquivo</th><th>Função</th></tr>
+            <tr><td><code>FlatPatternHighlight.dll</code></td><td>O plugin em si (o programa)</td></tr>
+            <tr><td><code>FlatPatternHighlight.men</code></td><td>Registra o plugin no menu do NX</td></tr>
+            <tr><td><code>FlatPatternHighlight.rtb</code></td><td>Adiciona um botão na faixa de opções (ribbon)</td></tr>
+        </table>
+        <div class="info-box warn" style="margin-top:.5rem;">
+            <strong>Importante:</strong> Os três arquivos devem estar na <strong>mesma pasta</strong>.
+        </div>
+    </div>
+
+    <div class="step">
+        <strong>Reinicie o NX</strong>
+        <p>Feche e abra o NX novamente. O plugin será carregado automaticamente.</p>
+    </div>
+</div>
+
+<h3 id="verificar">✅ Verificar a instalação</h3>
+<p>Após reiniciar o NX, você deverá ver:</p>
+<ul>
+    <li>Um novo item de menu chamado <strong>"Flat Pattern"</strong> antes do menu <strong>Help</strong></li>
+    <li>Uma nova aba na faixa de opções chamada <strong>"Flat Pattern"</strong> com um botão <strong>"Highlight"</strong></li>
+</ul>
+
+<div class="info-box err">
+    <strong>⚠ Não apareceu?</strong> Verifique se:
+    <ul>
+        <li>Os 3 arquivos estão na pasta <code>startup</code> correta</li>
+        <li>A DLL foi gerada para a versão correta do NX (2512)</li>
+        <li>O NX foi reiniciado completamente</li>
+    </ul>
+</div>
+</section>
+
+<hr>
+
+<!-- ================================================================== -->
+<!-- 3. EXECUTANDO O PLUGIN                                             -->
+<!-- ================================================================== -->
+<section class="section-anchor" id="executando">
+<h2>3. Executando o Plugin</h2>
+
+<p>Há <strong>3 formas</strong> de executar o plugin. Escolha a que for mais conveniente.</p>
+
+<h3 id="pelo-menu">📌 Pelo Menu</h3>
+<div class="step-list">
+    <div class="step">
+        <strong>Abra uma peça com flat pattern</strong>
+        <p>Certifique-se de que a peça ativa já possui um flat pattern gerado
+        (<em>Insert → Sheet Metal → Flat Pattern</em>).</p>
+    </div>
+    <div class="step">
+        <strong>Acesse o menu</strong>
+        <p>Na barra de menus do NX, clique em <strong>"Flat Pattern"</strong>
+        (que aparece antes do menu <strong>"Help"</strong>).</p>
+    </div>
+    <div class="step">
+        <strong>Clique na opção</strong>
+        <p>Selecione <strong>"Highlight Exterior Curves"</strong>.</p>
+    </div>
+    <div class="step">
+        <strong>Aguarde a execução</strong>
+        <p>O plugin processa as 3 etapas em alguns segundos. O resultado é escrito
+        no <em>Log File</em> do NX.</p>
+    </div>
+</div>
+
+<h3 id="pela-ribbon">🎯 Pela Ribbon (Faixa de Opções)</h3>
+<div class="step-list">
+    <div class="step">
+        <strong>Vá para a aba "Flat Pattern"</strong>
+        <p>Na faixa de opções do NX, localize a aba chamada <strong>"Flat Pattern"</strong>.</p>
+    </div>
+    <div class="step">
+        <strong>Clique no botão</strong>
+        <p>No grupo <strong>"Highlight"</strong>, clique no botão
+        <strong>"Highlight Exterior Curves"</strong>.</p>
+    </div>
+</table>
+    </div>
+</div>
+
+<h3 id="ctrl-u">⌨️ Pelo Ctrl+U (Executar NX Open)</h3>
+<div class="step-list">
+    <div class="step">
+        <strong>Pressione Ctrl+U</strong>
+        <p>Ou vá em <em>File → Execute → NX Open</em>.</p>
+    </div>
+    <div class="step">
+        <strong>Selecione a DLL</strong>
+        <p>Navegue até a pasta onde está o arquivo <code>FlatPatternHighlight.dll</code>
+        e selecione-o.</p>
+    </div>
+    <div class="step">
+        <strong>Clique em OK</strong>
+        <p>O plugin será executado imediatamente.</p>
+    </div>
+</div>
+
+<div class="info-box warn">
+    <strong>Importante:</strong> O plugin só funciona se a peça ativa <strong>já tiver um flat pattern</strong>
+    gerado. Se você receber a mensagem <em>"No Flat Pattern feature found"</em>, primeiro crie o
+    flat pattern usando <em>Insert → Sheet Metal → Flat Pattern</em>.
+</div>
+</section>
+
+<hr>
+
+<!-- ================================================================== -->
+<!-- 4. ENTENDENDO O RESULTADO                                          -->
+<!-- ================================================================== -->
+<section class="section-anchor" id="entendendo">
+<h2>4. Entendendo o Resultado</h2>
+
+<h3 id="log-file">📄 Onde encontrar o Log File</h3>
+<p>
+    Após a execução, o plugin escreve um relatório completo no <strong>Log File do NX</strong>.
+    Para visualizá-lo:
+</p>
+<ol>
+    <li>Vá em <strong>Help → Log File</strong> (ou <em>Ajuda → Arquivo de Log</em>)</li>
+    <li>O log é aberto no editor de texto do NX</li>
+    <li>Role até o final para ver a seção começando com <code>=== FlatPatternHighlight Diagnostic Log ===</code></li>
+</ol>
+
+<div class="info-box ok">
+    <strong>💡 Dica:</strong> Você pode copiar todo o conteúdo do log e colar em um editor de texto
+    (Bloco de Notas, Excel, etc.) para análise posterior.
+</div>
+
+<h3 id="lendo-log">🔍 Como ler o log</h3>
+<p>O log é dividido em seções que correspondem às 3 etapas. Veja um exemplo comentado:</p>
+
+<pre><code>=== FlatPatternHighlight Diagnostic Log ===
+Part: 9300047324_C.prt                          ← Nome da peça analisada
+
+--- Outer Perimeter (True External Boundary) ---
+  Total exterior curves (raw): 74                 ← 74 curvas brutas no total
+  Outer perimeter curves: 22                      ← Só 22 são do contorno externo!
+  Inner (excluded): 52                            ← 52 são de recortes/furos (removidas)
+
+--- Bend Center Lines ---
+  Total bend lines: 4 (2 up, 2 down)             ← 4 linhas de centro de dobra encontradas
+
+--- Bend Line → Nearest Perimeter (Parallel) ---
+  Overall bbox: (50.0,30.0)-(450.0,380.0)        ← Dimensão total da peça: 400×350 mm
+  Bbox center: (250.0,205.0)
+
+  Bend[0] Tag=234567  Mid=(123.4,56.7)           ← 1ª dobra
+    Side A (nml+): nearest=   29.85               ← Lado A: curva mais próxima a 29.85 mm
+                   farthest  =  380.00            ← Lado A: borda exterior a 380 mm
+    Side B (nml-): nearest=    2.85               ← Lado B: curva mais próxima a 2.85 mm
+                   farthest  =   30.15            ← Lado B: borda exterior a 30.15 mm
+
+  PMI dimensions created: 4                      ← 4 cotas PMI geradas com sucesso
+=== End of Diagnostic Log ===</code></pre>
+
+<table>
+    <tr><th>Campo</th><th>O que significa</th><th>Exemplo</th></tr>
+    <tr><td><code>Outer perimeter curves</code></td><td>Quantas curvas formam o contorno externo verdadeiro (sem recortes)</td><td>22 de 74</td></tr>
+    <tr><td><code>Inner (excluded)</code></td><td>Quantas curvas são de recortes/furos e foram descartadas</td><td>52</td></tr>
+    <tr><td><code>Bend[N]</code></td><td>Índice da dobra na lista</td><td>Bend[0]</td></tr>
+    <tr><td><code>Mid=(x,y)</code></td><td>Posição central da linha de dobra no plano</td><td>(123.4, 56.7)</td></tr>
+    <tr><td><code>Dir=(dx,dy)</code></td><td>Direção da dobra (horizontal, vertical ou diagonal)</td><td>(1.000, 0.000) = horizontal</td></tr>
+    <tr><td><code>Side A nearest=</code></td><td>Distância da curva de perímetro mais próxima no lado A</td><td>29.85 mm</td></tr>
+    <tr><td><code>Side A farthest=</code></td><td>Distância da curva de perímetro mais distante no lado A (borda exterior)</td><td>380.00 mm</td></tr>
+    <tr><td><code>PMI dimensions created</code></td><td>Número de cotas PMI geradas automaticamente</td><td>4</td></tr>
+</table>
+
+<h3 id="highlights">👁️ O que os destaques significam</h3>
+<p>Durante a execução, você verá objetos destacados na tela do NX:</p>
+<ul>
+    <li><strong>Curvas do perímetro externo</strong> — ficam destacadas (highlight) na cor padrão do NX</li>
+    <li><strong>Linhas de centro de dobra</strong> — também destacadas visualmente</li>
+</ul>
+<p>Os destaques são <strong>temporários</strong> e desaparecem quando o plugin termina.</p>
+
+<h3 id="cotas-pmi">📏 Cotas PMI geradas</h3>
+<p>
+    Se você tiver a <strong>licença PMI/GD&amp;T</strong> ativa, o plugin cria cotas PMI em cadeia
+    que mostram as distâncias entre a borda externa e cada dobra:
+</p>
+<pre><code>[borda externa] ← 29.85 → [dobra 1] ← 22.85 → [dobra 2] ← ...</code></pre>
+
+<div class="info-box warn">
+    <strong>Sem licença PMI?</strong> O plugin desenha <strong>linhas indicadoras vermelhas</strong>
+    no lugar das cotas. Você ainda pode ver as distâncias no Log File.
+</div>
+
+<p><strong>As cotas recebem o atributo</strong> <code>"FlatPatternHighlight" = "true"</code>, permitindo
+que você identifique quais cotas foram geradas pelo plugin.</p>
+</section>
+
+<hr>
+
+<!-- ================================================================== -->
+<!-- 5. EXEMPLOS PRÁTICOS                                               -->
+<!-- ================================================================== -->
+<section class="section-anchor" id="exemplos">
+<h2>5. Exemplos Práticos</h2>
+
+<h3 id="ex1">📘 Exemplo 1: Peça simples com 2 dobras</h3>
+<p><strong>Cenário:</strong> Uma chapa retangular com duas dobras simples (uma para cima, uma para baixo).</p>
+<p><strong>Procedimento:</strong></p>
+<ol>
+    <li>Abra a peça no NX</li>
+    <li>Crie o flat pattern (<em>Insert → Sheet Metal → Flat Pattern</em>)</li>
+    <li>Execute o plugin (Menu → <em>Flat Pattern → Highlight Exterior Curves</em>)</li>
+    <li>Abra o Log File (<em>Help → Log File</em>)</li>
+</ol>
+<p><strong>O que você verá no log:</strong></p>
+<pre><code>--- Outer Perimeter (True External Boundary) ---
+  Outer perimeter curves: 4                      ← 4 segmentos = retângulo simples
+
+--- Bend Center Lines ---
+  Total bend lines: 2 (1 up, 1 down)             ← 2 dobras
+
+--- Bend Line → Nearest Perimeter (Parallel) ---
+  Bend[0] (UP)  → nearest: 15.2 mm              ← Dobra 1 está a 15.2 mm da borda
+  Bend[1] (DOWN) → nearest: 22.8 mm              ← Dobra 2 está a 22.8 mm da borda
+
+  PMI dimensions created: 2                      ← 2 cotas PMI criadas</code></pre>
+
+<h3 id="ex2">📗 Exemplo 2: Peça complexa com recortes</h3>
+<p><strong>Cenário:</strong> Uma peça com vários furos, notches e recortes internos — 74 curvas externas brutas.</p>
+<p><strong>O que o plugin faz de especial:</strong></p>
+<ol>
+    <li>Das 74 curvas, identifica que apenas <strong>22</strong> pertencem ao contorno externo verdadeiro</li>
+    <li>As <strong>52</strong> curvas restantes (furos, notches) são ignoradas na análise</li>
+    <li>Para cada dobra, o algoritmo detecta automaticamente se a curva mais próxima é um recorte fino
+        (cutout) e a ignora, usando a <strong>segunda curva mais próxima</strong> como referência</li>
+</ol>
+<p><strong>Log característico:</strong></p>
+<pre><code>  Outer perimeter curves: 22
+  Inner (excluded): 52
+
+  Bend[0] Dir=(1.000,0.000)
+    Side A: nearest=   2.85  (cutout fino ignorado)
+            2ndNearest= 22.85 (borda real usada)
+            farthest  =380.00</code></pre>
+<div class="info-box ok">
+    <strong>✅</strong> O plugin automaticamente detecta que o valor 2.85 mm é de um recorte
+    e usa o 22.85 mm (a segunda curva mais próxima) como referência correta.
+</div>
+
+<h3 id="ex3">🔴 Exemplo 3: Diagnóstico de problemas</h3>
+<p><strong>Situação:</strong> Você executa o plugin e recebe a mensagem:</p>
+<pre><code>No Flat Pattern feature found.</code></pre>
+<p><strong>Causa provável:</strong> A peça ativa não possui um flat pattern. Nem toda peça de Sheet Metal
+tem um flat pattern — ele precisa ser criado explicitamente.</p>
+<p><strong>Solução:</strong></p>
+<ol>
+    <li>Vá em <em>Insert → Sheet Metal → Flat Pattern</em></li>
+    <li>Selecione a face de referência e configure os parâmetros</li>
+    <li>Clique em OK para gerar o flat pattern</li>
+    <li>Execute o plugin novamente</li>
+</ol>
+
+<hr>
+
+<p><strong>Situação:</strong> O plugin executa mas nenhuma cota PMI é criada:</p>
+<pre><code>PMI dimensions created: 0</code></pre>
+<p><strong>Causas possíveis:</strong></p>
+<ul>
+    <li><strong>Sem licença PMI:</strong> O log mostrará <code>No PMI license (948802)</code>. Neste caso,
+        o plugin cria <strong>linhas vermelhas indicadoras</strong> — você ainda pode ver as
+        distâncias no Log File.</li>
+    <li><strong>Dobras diagonais sem candidato paralelo:</strong> O log mostrará
+        <code>No boundary curve found</code>. O plugin usa o fallback de curva mais próxima.</li>
+    <li><strong>Flat solid body não encontrado:</strong> O log mostrará
+        <code>Could not locate flat solid body</code>. O plugin usa todas as curvas como fallback.</li>
+</ul>
+</section>
+
+<hr>
+
+<!-- ================================================================== -->
+<!-- 6. DICAS & BOAS PRÁTICAS                                           -->
+<!-- ================================================================== -->
+<section class="section-anchor" id="dicas">
+<h2>6. Dicas &amp; Boas Práticas</h2>
+
+<div class="step-list">
+    <div class="step">
+        <strong>Sempre gere o flat pattern antes</strong>
+        <p>O plugin analisa o flat pattern <strong>existente</strong>. Certifique-se de que ele foi
+        gerado (<em>Insert → Sheet Metal → Flat Pattern</em>) antes de executar o plugin.</p>
+    </div>
+    <div class="step">
+        <strong>Consulte o Log File primeiro</strong>
+        <p>Antes de olhar para as cotas na tela, leia o Log File. Ele contém <strong>todas as
+        distâncias</strong> de forma organizada e é mais rápido de consultar.</p>
+    </div>
+    <div class="step">
+        <strong>Use o log para documentação</strong>
+        <p>Copie o conteúdo do Log File para um relatório ou planilha. Ele pode servir como
+        documentação da análise da peça.</p>
+    </div>
+    <div class="step">
+        <strong>Dobras diagonais precisam de atenção</strong>
+        <p>Se sua peça tem dobras em ângulo (não apenas horizontais/verticais), verifique no log
+        se todas as dobras diagonais receberam cota. O plugin tem um fallback especial para elas.</p>
+    </div>
+    <div class="step">
+        <strong>Atualize o plugin regularmente</strong>
+        <p>Verifique se há versões mais recentes do plugin. Cada versão traz melhorias nos
+        algoritmos de análise e correção de casos especiais.</p>
+    </div>
+    <div class="step">
+        <strong>Teste em uma cópia da peça</strong>
+        <p>O plugin cria cotas PMI e linhas indicadoras na peça. Se você não quiser alterar o
+        modelo original, faça uma cópia antes de executar o plugin.</p>
+    </div>
+</div>
+</section>
+
+<hr>
+
+<!-- ================================================================== -->
+<!-- 7. FAQ                                                             -->
+<!-- ================================================================== -->
+<section class="section-anchor" id="faq">
+<h2>7. Perguntas Frequentes (FAQ)</h2>
+
+<h3>❓ O plugin funciona no NX 2406 ou versões anteriores?</h3>
+<p>
+    O plugin foi desenvolvido e testado no <strong>NX 2512</strong>. Versões anteriores
+    podem funcionar, mas não são oficialmente suportadas. É necessário recompilar a DLL
+    com as referências corretas para a sua versão.
+</p>
+
+<h3>❓ Preciso instalar algo além dos 3 arquivos?</h3>
+<p>
+    <strong>Não.</strong> Apenas os 3 arquivos (<code>.dll</code>, <code>.men</code>, <code>.rtb</code>)
+    na pasta <code>startup</code> são necessários. O NX carrega o plugin automaticamente.
+</p>
+
+<h3>❓ O plugin modifica o modelo 3D?</h3>
+<p>
+    O plugin <strong>não modifica a geometria 3D</strong> da peça. Ele apenas:
+</p>
+<ul>
+    <li>Destaca objetos temporariamente (os highlights desaparecem ao final)</li>
+    <li>Cria cotas PMI (que podem ser apagadas manualmente se desejado)</li>
+    <li>Cria linhas indicadoras vermelhas (que também podem ser apagadas)</li>
+    <li>Escreve no Log File (que é apenas um registro de texto)</li>
+</ul>
+<p>
+    Todas as alterações no modelo se limitam a <strong>anotações PMI</strong>, que são
+    totalmente removíveis.
+</p>
+
+<h3>❓ Como removo as cotas PMI criadas pelo plugin?</h3>
+<p>
+    As cotas e linhas indicadoras criadas pelo plugin recebem o atributo
+    <code>"FlatPatternHighlight" = "true"</code>. Você pode identificá-las por este atributo
+    e apagá-las manualmente no NX.
+</p>
+
+<h3>❓ O que significa "Flat solid body not found" no log?</h3>
+<p>
+    Significa que o plugin não conseguiu localizar o corpo sólido do flat pattern dentro do NX.
+    Isso pode acontecer em peças muito complexas ou com configurações especiais. O plugin então
+    usa <strong>todas as curvas externas</strong> (incluindo recortes) como fallback — os resultados
+    ainda são úteis, mas menos precisos.
+</p>
+
+<h3>❓ Quantas dobras o plugin consegue analisar?</h3>
+<p>
+    Não há limite. O plugin já foi testado com peças contendo de <strong>2 a 30+ dobras</strong>.
+    O tempo de execução cresce linearmente com o número de dobras.
+</p>
+
+<h3>❓ O plugin funciona com peças em português?</h3>
+<p>
+    <strong>Sim.</strong> O NX é agnóstico ao idioma para as operações de API que o plugin utiliza.
+    O log é gerado em português ou inglês dependendo da configuração do NX.
+</p>
+
+<h3>❓ Como desinstalo o plugin?</h3>
+<p>
+    Basta <strong>remover os 3 arquivos</strong> da pasta <code>startup</code>:
+</p>
+<ol>
+    <li>Feche o NX</li>
+    <li>Delete <code>FlatPatternHighlight.dll</code>, <code>FlatPatternHighlight.men</code> e
+        <code>FlatPatternHighlight.rtb</code> da pasta <code>startup</code></li>
+    <li>Reinicie o NX — o plugin não estará mais disponível</li>
+</ol>
+</section>
+
+<hr>
+
+<!-- ================================================================== -->
+<!-- 8. SUPORTE & CONTATO                                               -->
+<!-- ================================================================== -->
+<section class="section-anchor" id="suporte">
+<h2>8. Suporte &amp; Contato</h2>
+
+<div class="info-box">
+    <p><strong>Repositório do projeto:</strong>
+    <a href="https://github.com/aldokruger/FlatPatternHighlight" target="_blank">
+        github.com/aldokruger/FlatPatternHighlight</a></p>
+    <p><strong>Relatar problemas:</strong> Abra uma <em>issue</em> no GitHub</p>
+    <p><strong>Autor:</strong> Aldo Kruger</p>
+</div>
+
+<p>Ao relatar um problema, inclua:</p>
+<ul>
+    <li>Versão do NX (ex.: 2512)</li>
+    <li>Versão do plugin (ex.: 0.4.0)</li>
+    <li>Conteúdo completo do Log File do NX</li>
+    <li>Descrição do comportamento esperado vs. observado</li>
+    <li>Se possível, uma imagem ou modelo simplificado que reproduza o problema</li>
+</ul>
+
+<p style="text-align:center;margin-top:3rem;color:var(--fg-dim);font-size:.85rem;">
+    <em>FlatPatternHighlight — Feito para facilitar o seu trabalho com Sheet Metal no NX.</em>
+</p>
+</section>
+
+<hr>
+
+<footer style="text-align:center;color:var(--fg-dim);font-size:.85rem;padding-top:1.5rem;">
+    <p>FlatPatternHighlight — Guia do Usuário &nbsp;|&nbsp; Versão 0.4.0 &nbsp;|&nbsp; 2026-06-28 &nbsp;|&nbsp;
+    <a href="#toc">↑ Voltar ao Índice</a></p>
+</footer>
+
+</body>
+</html>

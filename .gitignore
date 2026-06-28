@@ -9,7 +9,6 @@ src_sample/
 *.prt
 *.pdf
 journal.cs
-docs/
 docs_old/
 .DS_Store
 ._*
