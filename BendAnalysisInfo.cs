@@ -3,111 +3,111 @@ using NXOpen;
 namespace FlatPatternHighlight
 {
     /// <summary>
-    /// Consolidated analysis result for a single bend centre line.
+    /// Resultado consolidado da análise para uma única linha de centro de dobra.
     ///
-    /// Stores the bend geometry (midpoint, endpoints, direction, perpendicular normal),
-    /// plus up to six perimeter-curve candidate indices per side (A = nml+, B = nml-).
-    /// Each candidate variant serves a specific role in the boundary-selection pipeline:
+    ///  Armazena a geometria da dobra (ponto médio, extremidades, direção, normal perpendicular),
+    ///  mais até seis índices candidatos de curva de perímetro por lado (A = nml+, B = nml-).
+    ///  Cada variante candidata tem uma função específica no pipeline de seleção de contorno:
     ///
-    ///   best / secondBest
-    ///     The closest parallel segment and the second-closest. "best" may be the inner
-    ///     face of a flange or a notch edge glued to the bend (e.g. 2.85 mm) rather than
+    ///     best / secondBest
+    ///         O segmento paralelo mais próximo e o segundo mais próximo. "best" pode ser a face
+    ///         interna de uma aba ou um entalhe colado à dobra (ex.: 2.85 mm) em vez
     ///     the true outer boundary (e.g. 22.85 mm). When bestDist / secondBestDist &lt; CutoutSkipRatio,
-    ///     the nearest is a thin notch and secondBest should be used instead.
+    ///         o mais próximo é um entalhe fino e secondBest deve ser usado em seu lugar.
     ///
-    ///   far / farLine
-    ///     The farthest parallel segment — normally the TRUE outer boundary. farLine
-    ///     restricts to Line objects only (PMI Perpendicular requires Line as first reference).
-    ///     Corrected by SmallEdgeRatio: if the farthest segment is a short corner notch,
-    ///     it is replaced by the longest parallel segment.
+    ///     far / farLine
+    ///         O segmento paralelo mais distante — normalmente a VERDADEIRA borda externa. farLine
+    ///         restringe a objetos Line apenas (PMI Perpendicular exige Line como primeira referência).
+    ///         Corrigido por SmallEdgeRatio: se o segmento mais distante for um entalhe curto de canto,
+    ///         ele é substituído pelo segmento paralelo mais longo.
     ///
-    ///   near (no parallelism filter)
-    ///     Fallback of last resort for diagonal bends where the parallelism filter
+    ///     near (sem filtro de paralelismo)
+    ///         Fallback de último recurso para dobras diagonais onde o filtro de paralelismo
     ///     (|dot| &gt;= ParallelismThreshold) discards all candidates.
     ///
-    ///   bestLine
-    ///     The closest segment that is a Line. Used in Arc→Line promotion for diagonal
-    ///     bends (where bestIdx may be an Arc that the PMI builder rejects).
+    ///     bestLine
+    ///         O segmento mais próximo que é uma Line. Usado na promoção Arc→Line para dobras
+    ///         diagonais (onde bestIdx pode ser um Arc que o builder PMI rejeita).
     /// </summary>
     public class BendAnalysisInfo
     {
         // ── Identity / geometry ──────────────────────────────────────────
 
-        /// <summary>Original index in the bendLines collection (debug / log).</summary>
+        /// <summary>Índice original na coleção bendLines (debug / log).</summary>
         public int Index { get; set; }
 
-        /// <summary>The bend centre-line curve object.</summary>
+        /// <summary>Objeto Curve da linha de centro da dobra.</summary>
         public Curve Bend { get; set; }
 
-        /// <summary>Midpoint of the bend line (3D pick point for PMI).</summary>
+        /// <summary>Ponto médio da linha de dobra (ponto de seleção 3D para PMI).</summary>
         public Point3d MidPoint { get; set; }
 
-        /// <summary>Start endpoint of the bend line.</summary>
+        /// <summary>Ponto inicial da linha de dobra.</summary>
         public Point3d StartPoint { get; set; }
 
-        /// <summary>End endpoint of the bend line.</summary>
+        /// <summary>Ponto final da linha de dobra.</summary>
         public Point3d EndPoint { get; set; }
 
-        /// <summary>Unit direction vector of the bend in the UV plane.</summary>
+        /// <summary>Vetor direção unitário da dobra no plano UV.</summary>
         public Vector3d Direction { get; set; }
 
-        /// <summary>Perpendicular normal to the bend direction (rotate 90° CCW: -dy, dx).</summary>
+        /// <summary>Normal perpendicular à direção da dobra (rotação 90° anti-horária: -dy, dx).</summary>
         public Vector3d Normal { get; set; }
 
         // ── Perimeter candidates — Side A (nml+) ─────────────────────────
 
-        /// <summary>Index of closest parallel perimeter segment (Side A).</summary>
+        /// <summary>Índice do segmento de perímetro paralelo mais próximo (Lado A).</summary>
         public int BestIdxA { get; set; } = -1;
 
-        /// <summary>Index of second-closest parallel perimeter segment (Side A).</summary>
+        /// <summary>Índice do segundo segmento de perímetro paralelo mais próximo (Lado A).</summary>
         public int SecondBestIdxA { get; set; } = -1;
 
-        /// <summary>Index of farthest parallel perimeter segment (Side A).</summary>
+        /// <summary>Índice do segmento de perímetro paralelo mais distante (Lado A).</summary>
         public int FarIdxA { get; set; } = -1;
 
-        /// <summary>Index of closest segment with no parallelism filter (Side A).</summary>
+        /// <summary>Índice do segmento mais próximo sem filtro de paralelismo (Lado A).</summary>
         public int NearIdxA { get; set; } = -1;
 
-        /// <summary>Index of closest parallel Line (Side A).</summary>
+        /// <summary>Índice da Line paralela mais próxima (Lado A).</summary>
         public int BestLineIdxA { get; set; } = -1;
 
-        /// <summary>Index of farthest parallel Line (Side A).</summary>
+        /// <summary>Índice da Line paralela mais distante (Lado A).</summary>
         public int FarLineIdxA { get; set; } = -1;
 
         // ── Perimeter candidates — Side B (nml-) ─────────────────────────
 
-        /// <summary>Index of closest parallel perimeter segment (Side B).</summary>
+        /// <summary>Índice do segmento de perímetro paralelo mais próximo (Lado B).</summary>
         public int BestIdxB { get; set; } = -1;
 
-        /// <summary>Index of second-closest parallel perimeter segment (Side B).</summary>
+        /// <summary>Índice do segundo segmento de perímetro paralelo mais próximo (Lado B).</summary>
         public int SecondBestIdxB { get; set; } = -1;
 
-        /// <summary>Index of farthest parallel perimeter segment (Side B).</summary>
+        /// <summary>Índice do segmento de perímetro paralelo mais distante (Lado B).</summary>
         public int FarIdxB { get; set; } = -1;
 
-        /// <summary>Index of closest segment with no parallelism filter (Side B).</summary>
+        /// <summary>Índice do segmento mais próximo sem filtro de paralelismo (Lado B).</summary>
         public int NearIdxB { get; set; } = -1;
 
-        /// <summary>Index of closest parallel Line (Side B).</summary>
+        /// <summary>Índice da Line paralela mais próxima (Lado B).</summary>
         public int BestLineIdxB { get; set; } = -1;
 
-        /// <summary>Index of farthest parallel Line (Side B).</summary>
+        /// <summary>Índice da Line paralela mais distante (Lado B).</summary>
         public int FarLineIdxB { get; set; } = -1;
 
         // ── Distances — Side A ───────────────────────────────────────────
 
-        /// <summary>Distance of the closest parallel segment (Side A).</summary>
+        /// <summary>Distância do segmento paralelo mais próximo (Lado A).</summary>
         public double BestDistA { get; set; } = double.MaxValue;
 
-        /// <summary>Distance of the second-closest parallel segment (Side A).</summary>
+        /// <summary>Distância do segundo segmento paralelo mais próximo (Lado A).</summary>
         public double SecondBestDistA { get; set; } = double.MaxValue;
 
         // ── Distances — Side B ───────────────────────────────────────────
 
-        /// <summary>Distance of the closest parallel segment (Side B).</summary>
+        /// <summary>Distância do segmento paralelo mais próximo (Lado B).</summary>
         public double BestDistB { get; set; } = double.MaxValue;
 
-        /// <summary>Distance of the second-closest parallel segment (Side B).</summary>
+        /// <summary>Distância do segundo segmento paralelo mais próximo (Lado B).</summary>
         public double SecondBestDistB { get; set; } = double.MaxValue;
     }
 }
