@@ -1178,7 +1178,6 @@ namespace FlatPatternHighlight
             int normalAxis,
             LogFile lw)
         {
-            NXOpen.Session theSession = NXOpen.Session.GetSession();
             NXOpen.Session.UndoMarkId undoMark =
                 theSession.SetUndoMark(NXOpen.Session.MarkVisibility.Invisible, "PMI dim attempt");
 
@@ -1194,7 +1193,6 @@ namespace FlatPatternHighlight
 
                 builder.Origin.Plane.PlaneMethod =
                     NXOpen.Annotations.PlaneBuilder.PlaneMethodType.ModelView;
-                builder.Origin.SetInferRelativeToGeometry(false);
                 builder.Origin.Anchor =
                     NXOpen.Annotations.OriginBuilder.AlignmentPosition.MidCenter;
 
