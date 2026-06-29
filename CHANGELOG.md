@@ -9,6 +9,28 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 ## [Unreleased]
 
 ### Adicionado
+- **Sistema de configuração por usuário** — parâmetros de análise lidos de
+  `%APPDATA%\FlatPatternHighlight\settings.json` (JSON). O arquivo é criado
+  automaticamente com valores padrão na primeira execução. Cada usuário pode
+  ajustar os parâmetros sem recompilar a DLL.
+  - Classe `Settings` interna com 7 parâmetros documentados
+  - JSON parser/serializer manual (sem dependência externa)
+  - Valores logados no NX LogFile na inicialização para confirmação
+  - Guardas numéricas (`MinSegmentLength`, `OverlapEpsilon`) mantidas privadas
+  - `SETTINGS_REFERENCE.md` — guia detalhado de cada parâmetro com trechos de
+    código, tabelas de efeito e cenários típicos
+- **Internacionalização pt-BR** — todos os comentários XML e inline traduzidos
+  para português brasileiro (213 alterações em 2 arquivos)
+- **README** atualizado:
+  - Nova seção "Configuração" com tabela resumo e link para `SETTINGS_REFERENCE.md`
+  - Line count corrigido (800+ → 1450)
+  - Seção "Chain PMI Dimensioning" reescrita para refletir o algoritmo atual
+    ("nearest corrected cross-side" + skip de cutout)
+  - Tabela da cascata de fallback PMI
+  - Step 3 expandido com multi-candidate tracking, correção small-edge e dobras diagonais
+  - Seção Changelog adicionada
+- **CHANGELOG.md** — este arquivo
+- **SETTINGS_REFERENCE.md** — documentação completa dos parâmetros
 - **Documentação refinada** — comentários inline detalhados nas heurísticas críticas do código:
   - Estrutura da tupla `bendInfos` (23 campos) documentada campo a campo
   - Tracking de múltiplos candidatos (`bestIdx`/`secondBestIdx`/`farIdx`/`nearIdx`/`bestLineIdx`/`farLineIdx`) com explicação do *porquê* de cada um
@@ -16,13 +38,6 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
   - Fallback de dobras diagonais (threshold 0,2) explicado
   - Correção small-edge (`SmallEdgeRatio = 0,5`) explicada
   - Cascata de fallback PMI (indicator-line → point-fallback) documentada nos catch blocks
-- **CHANGELOG.md** — este arquivo
-- **README** atualizado:
-  - Line count corrigido (800+ → 1450)
-  - Seção "Chain PMI Dimensioning" reescrita para refletir o algoritmo atual ("nearest corrected cross-side" + skip de cutout)
-  - Tabela da cascata de fallback PMI
-  - Step 3 expandido com multi-candidate tracking, correção small-edge e dobras diagonais
-  - Seção Changelog adicionada
 
 ---
 

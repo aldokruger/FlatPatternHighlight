@@ -1,0 +1,9 @@
+{
+  "ParallelismThreshold": 0.95,
+  "DiagonalBendThreshold": 0.2,
+  "ArtefactSkipDistanceSq": 0.25,
+  "CutoutSkipRatio": 0.3,
+  "SmallEdgeRatio": 0.5,
+  "SmallEdgeGuardFactor": 0.5,
+  "LaneLengthRatioThreshold": 0.7
+}

@@ -14,6 +14,7 @@ Substitui a contagem manual de dobras e a identificação visual do contorno ext
 - [Dependências NX](#dependências-nx)
 - [Build](#build)
 - [Execução](#execução)
+- [Configuração](#configuração)
 - [Algoritmos em Detalhe](#algoritmos-em-detalhe)
   - [Step 1 — Outer Perimeter Filtering](#step-1--outer-perimeter-filtering)
   - [Step 2 — Bend Center Lines](#step-2--bend-center-lines)
@@ -239,6 +240,46 @@ As cotas e pontos auxiliares são marcados com o atributo de usuário `"FlatPatt
 1. **PMI → Drafting → Annotation → Delete Annotations by User Attribute**
 2. Filtro: `"FlatPatternHighlight" = "true"`
 3. Delete
+
+---
+
+## Configuração
+
+A partir da versão com suporte a configuração, os parâmetros de análise podem ser
+ajustados por usuário **sem recompilar a DLL**. As configurações ficam em:
+
+```
+%APPDATA%\FlatPatternHighlight\settings.json
+```
+
+Exemplo de caminho real:
+
+```
+C:\Users\Joao\AppData\Roaming\FlatPatternHighlight\settings.json
+```
+
+O arquivo é **criado automaticamente** na primeira execução do plugin.
+
+### Parâmetros Configuráveis
+
+| Parâmetro | Padrão | Controle |
+|-----------|:------:|----------|
+| `ParallelismThreshold` | `0.95` | Rigor do casamento entre curvas paralelas |
+| `CutoutSkipRatio` | `0.3` | Detecção de recortes/entalhes finos |
+| `SmallEdgeRatio` | `0.5` | Correção de cantos chanfrados (notch de canto) |
+| `LaneLengthRatioThreshold` | `0.7` | Separação de flanges em lanes independentes |
+| `DiagonalBendThreshold` | `0.2` | Sensibilidade para detectar dobras diagonais |
+| `SmallEdgeGuardFactor` | `0.5` | Proteção contra falso positivo da correção de canto |
+| `ArtefactSkipDistanceSq` | `0.25` | Filtro de bordas do perímetro retornadas como dobras |
+
+Para detalhes completos de cada parâmetro, incluindo:
+
+- Onde cada um é usado no código (arquivo + linha)
+- Tabelas de efeito: o que acontece ao aumentar ou diminuir
+- Cenários típicos de configuração (peça simples, complexa, angular)
+- Exemplos práticos com valores
+
+→ **[Leia SETTINGS_REFERENCE.md](SETTINGS_REFERENCE.md)**
 
 ---
 
