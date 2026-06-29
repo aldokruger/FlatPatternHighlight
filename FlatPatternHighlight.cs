@@ -128,6 +128,9 @@ namespace FlatPatternHighlight
         /// </summary>
         public static int Main(string[] args)
         {
+            List<Curve> outerPerim = null;
+            List<Curve> bendLines = null;
+
             try
             {
                 theSession = Session.GetSession();
@@ -144,8 +147,11 @@ namespace FlatPatternHighlight
                     return 1;
                 }
 
+                // Write everything to the NX LogFile (available from Help → Log File).
+                LogFile lw = theSession.LogFile;
+
                 // Locate the FlatPattern feature — without it there is nothing to analyse.
-                FlatPattern flatPattern = FindFlatPattern(workPart);
+                FlatPattern flatPattern = FindFlatPattern(workPart, lw);
                 if (flatPattern == null)
                 {
                     theUI.NXMessageBox.Show(
@@ -157,14 +163,9 @@ namespace FlatPatternHighlight
                     return 1;
                 }
 
-                // Write everything to the NX LogFile (available from Help → Log File).
-                LogFile lw = theSession.LogFile;
                 lw.WriteLine("=== FlatPatternHighlight Diagnostic Log ===");
                 lw.WriteLine($"Part: {workPart.Name}");
                 lw.WriteLine("");
-
-                List<Curve> outerPerim = null;
-                List<Curve> bendLines = null;
 
                 // Step 1 — identify the true outer boundary.
                 HighlightOuterPerimeter(flatPattern, workPart, lw, out outerPerim);
@@ -177,10 +178,6 @@ namespace FlatPatternHighlight
                 if (bendLines != null && bendLines.Count > 0 && outerPerim != null && outerPerim.Count > 0)
                     AnalyzeBendToPerimeter(bendLines, outerPerim, lw, workPart);
 
-                // Highlights are transient analysis aids only; remove them before exit.
-                UnhighlightObjects(outerPerim);
-                UnhighlightObjects(bendLines);
-
                 lw.WriteLine("=== End of Diagnostic Log ===");
                 return 0;
             }
@@ -188,13 +185,20 @@ namespace FlatPatternHighlight
             {
                 if (theUI != null)
                     try { theUI.NXMessageBox.Show("Flat Pattern Highlight - Error", NXMessageBox.DialogType.Error, $"NX Error: {ex.Message}"); } catch { }
-                return 0;
+                return 1;
             }
             catch (Exception ex)
             {
                 if (theUI != null)
                     try { theUI.NXMessageBox.Show("Flat Pattern Highlight - Error", NXMessageBox.DialogType.Error, $"Error: {ex.Message}"); } catch { }
-                return 0;
+                return 1;
+            }
+            finally
+            {
+                // Highlights are transient analysis aids only; remove them before exit.
+                // Executes even if an exception occurs mid-analysis.
+                try { if (outerPerim != null) UnhighlightObjects(outerPerim); } catch { }
+                try { if (bendLines != null) UnhighlightObjects(bendLines); } catch { }
             }
         }
 
@@ -217,6 +221,7 @@ namespace FlatPatternHighlight
         private static void HighlightOuterPerimeter(FlatPattern flatPattern, Part workPart, LogFile lw, out List<Curve> outerPerim)
         {
             outerPerim = null;
+            const int OuterLoopType = 1; // UF_MODL loop type for outer boundary
             lw.WriteLine("--- Outer Perimeter (True External Boundary) ---");
 
             // Fetch ALL exterior curves — includes outer boundary + every notch/cutout edge.
@@ -265,31 +270,46 @@ namespace FlatPatternHighlight
                 if (face.SolidFaceType != Face.FaceType.Planar) continue;
 
                 IntPtr loopList = IntPtr.Zero;
-                NXOpen.Utilities.JAM.StartUFCall("FlatPatternHighlight");
-                int err = UF_MODL_ask_face_loops(face.Tag, out loopList);
-                NXOpen.Utilities.JAM.EndUFCall();
-
-                if (err != 0 || loopList == IntPtr.Zero) continue;
-
-                int loopCount;
-                UF_MODL_ask_loop_list_count(loopList, out loopCount);
-
-                for (int li = 0; li < loopCount; li++)
+                try
                 {
-                    int loopType;
-                    IntPtr edgeList;
-                    UF_MODL_ask_loop_list_item(loopList, li, out loopType, out edgeList);
-                    if (loopType != 1) continue; // Skip inner loops (type 2).
+                    NXOpen.Utilities.JAM.StartUFCall("FlatPatternHighlight");
+                    int err = UF_MODL_ask_face_loops(face.Tag, out loopList);
+                    NXOpen.Utilities.JAM.EndUFCall();
 
-                    int edgeCount;
-                    UF_MODL_ask_list_count(edgeList, out edgeCount);
-                    for (int ei = 0; ei < edgeCount; ei++)
+                    if (err != 0 || loopList == IntPtr.Zero)
                     {
-                        Tag et; UF_MODL_ask_list_item(edgeList, ei, out et);
-                        outerEdgeTags.Add(et);
+                        lw.WriteLine($"  [diag] UF_MODL_ask_face_loops returned {err} for face Tag={face.Tag}");
+                        continue;
+                    }
+
+                    int loopCount;
+                    int rc = UF_MODL_ask_loop_list_count(loopList, out loopCount);
+                    if (rc != 0) { lw.WriteLine($"  [diag] UF_MODL_ask_loop_list_count returned {rc}"); continue; }
+
+                    for (int li = 0; li < loopCount; li++)
+                    {
+                        int loopType;
+                        IntPtr edgeList;
+                        rc = UF_MODL_ask_loop_list_item(loopList, li, out loopType, out edgeList);
+                        if (rc != 0) { lw.WriteLine($"  [diag] UF_MODL_ask_loop_list_item({li}) returned {rc}"); continue; }
+                        if (loopType != OuterLoopType) continue; // Skip inner loops (type 2).
+
+                        int edgeCount;
+                        rc = UF_MODL_ask_list_count(edgeList, out edgeCount);
+                        if (rc != 0) { lw.WriteLine($"  [diag] UF_MODL_ask_list_count returned {rc}"); continue; }
+                        for (int ei = 0; ei < edgeCount; ei++)
+                        {
+                            Tag et;
+                            rc = UF_MODL_ask_list_item(edgeList, ei, out et);
+                            if (rc == 0) outerEdgeTags.Add(et);
+                        }
                     }
                 }
-                UF_MODL_delete_loop_list(ref loopList);
+                finally
+                {
+                    if (loopList != IntPtr.Zero)
+                        UF_MODL_delete_loop_list(ref loopList);
+                }
             }
 
             lw.WriteLine($"  Outer loop edge tags: {outerEdgeTags.Count}");
@@ -1528,7 +1548,7 @@ namespace FlatPatternHighlight
         /// Locate the first FlatPattern feature in the part's feature tree.
         /// Returns null if no flat pattern exists.
         /// </summary>
-        private static FlatPattern FindFlatPattern(Part workPart)
+        private static FlatPattern FindFlatPattern(Part workPart, LogFile lw = null)
         {
             // Iterating workPart.Features can trigger NX's internal PartCollection.FindObject
             // when the flat pattern feature resolves its source part (which may not be loaded).
@@ -1538,7 +1558,10 @@ namespace FlatPatternHighlight
                 foreach (Feature f in workPart.Features)
                     if (f is FlatPattern) return (FlatPattern)f;
             }
-            catch { }
+            catch (Exception ex)
+            {
+                lw?.WriteLine($"FindFlatPattern: {ex.GetType().Name} — {ex.Message}");
+            }
             return null;
         }
 
