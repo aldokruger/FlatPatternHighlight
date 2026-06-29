@@ -1,9 +1,16 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using NXOpen;
 using NXOpen.Features;
+
+// ReSharper disable InconsistentNaming
+
+// Aliases for JSON serialisation
+using JObject = System.Collections.Generic.Dictionary<string, object>;
 
 namespace FlatPatternHighlight
 {
@@ -80,39 +87,242 @@ namespace FlatPatternHighlight
         static extern int UF_MODL_delete_loop_list(ref IntPtr loopList);
 
         // =====================================================================
-        // CONSTANTES — limites nomeados usados em todo o pipeline de análise
+        // CONFIGURAÇÃO DO USUÁRIO — carregada de %APPDATA%\FlatPatternHighlight\settings.json
         // =====================================================================
 
-        /// <summary>Produto escalar mínimo para considerar duas direções de curva como paralelas.</summary>
-        private const double ParallelismThreshold = 0.95;
+        /// <summary>Configurações carregadas de arquivo JSON por usuário.
+        /// Cria o arquivo em %APPDATA%\FlatPatternHighlight\settings.json com os valores
+        /// padrão se ele não existir. Cada usuário pode ajustar os parâmetros sem recompilar.
+        /// </summary>
+        internal sealed class Settings
+        {
+            // ---- Campos com valores padrão (usados se o JSON não fornecer o valor) ----
 
-        /// <summary>Componente de direção mínimo (|dir.X| ou |dir.Y|) para uma dobra ser considerada "diagonal".
-        /// Dobras diagonais têm componentes significativas em ambos os eixos UV e podem não ter segmentos de perímetro paralelos.</summary>
-        private const double DiagonalBendThreshold = 0.2;
+            /// <summary>Produto escalar mínimo para considerar duas direções de curva como paralelas.</summary>
+            public double ParallelismThreshold = 0.95;
 
-        /// <summary>Limiar de distância ao quadrado (mm²) para pular linhas de dobra cujo ponto médio está sobre o perímetro externo.
-        /// Corresponde a um limiar linear de 0.5 mm (0.5² = 0.25).</summary>
-        private const double ArtefactSkipDistanceSq = 0.25; // 0.5 mm
+            /// <summary>
+            /// Componente de direção mínimo (|dir.X| ou |dir.Y|) para uma dobra ser considerada "diagonal".
+            /// Dobras diagonais têm componentes significativas em ambos os eixos UV e podem não ter
+            /// segmentos de perímetro paralelos.
+            /// </summary>
+            public double DiagonalBendThreshold = 0.2;
 
-        /// <summary>Limiar de proporção para detecção de recorte: se bestDist / secondBestDist estiver abaixo disso,
-        /// o segmento de perímetro "mais próximo" é provavelmente um entalhe fino e deve ser ignorado.</summary>
-        private const double CutoutSkipRatio = 0.3;
+            /// <summary>
+            /// Limiar de distância ao quadrado (mm²) para pular linhas de dobra cujo ponto médio
+            /// está sobre o perímetro externo. Corresponde a um limiar linear de 0.5 mm (0.5² = 0.25).
+            /// </summary>
+            public double ArtefactSkipDistanceSq = 0.25;
 
-        /// <summary>Proporção para correção SmallEdge: se o segmento de perímetro mais distante for mais curto que
-        /// SmallEdgeRatio × longestSegment, é provavelmente um entalhe de canto e deve ser substituído pelo mais longo.</summary>
-        private const double SmallEdgeRatio = 0.5;
+            /// <summary>
+            /// Limiar de proporção para detecção de recorte: se bestDist / secondBestDist estiver
+            /// abaixo disso, o segmento de perímetro "mais próximo" é provavelmente um entalhe fino
+            /// e deve ser ignorado.
+            /// </summary>
+            public double CutoutSkipRatio = 0.3;
 
-        /// <summary>Fator de proteção para correção SmallEdge: só substituir o mais distante pelo mais longo se
-        /// longestDist >= farDist * SmallEdgeGuardFactor, evitando substituição por um segmento muito próximo da dobra.</summary>
-        private const double SmallEdgeGuardFactor = 0.5;
+            /// <summary>
+            /// Proporção para correção SmallEdge: se o segmento de perímetro mais distante for
+            /// mais curto que SmallEdgeRatio × longestSegment, é provavelmente um entalhe de canto
+            /// e deve ser substituído pelo mais longo.
+            /// </summary>
+            public double SmallEdgeRatio = 0.5;
 
-        /// <summary>Proporção mínima de comprimento para duas dobras serem consideradas similares e assim pertencerem à mesma lane.</summary>
-        private const double LaneLengthRatioThreshold = 0.7;
+            /// <summary>
+            /// Fator de proteção para correção SmallEdge: só substituir o mais distante pelo mais
+            /// longo se longestDist >= farDist * SmallEdgeGuardFactor, evitando substituição por
+            /// um segmento muito próximo da dobra.
+            /// </summary>
+            public double SmallEdgeGuardFactor = 0.5;
 
-        /// <summary>Comprimento mínimo de projeção de segmento para evitar divisão por zero em cálculos de direção.</summary>
+            /// <summary>
+            /// Proporção mínima de comprimento para duas dobras serem consideradas similares
+            /// e assim pertencerem à mesma lane.
+            /// </summary>
+            public double LaneLengthRatioThreshold = 0.7;
+
+            // =====================================================================
+            // Carga / salvamento
+            // =====================================================================
+
+            /// <summary>Diretório do settings.json do usuário.</summary>
+            internal static readonly string ConfigDir =
+                Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "FlatPatternHighlight");
+
+            /// <summary>Caminho completo do settings.json do usuário.</summary>
+            internal static readonly string ConfigPath = Path.Combine(ConfigDir, "settings.json");
+
+            /// <summary>
+            /// Carrega as configurações do arquivo JSON do usuário.
+            /// Se o arquivo não existir, cria com os valores padrão e retorna os padrões.
+            /// Se houver erro de parsing, loga e retorna os padrões.
+            /// </summary>
+            internal static Settings Load()
+            {
+                try
+                {
+                    var configDir = ConfigDir;
+                    var configPath = ConfigPath;
+
+                    if (!Directory.Exists(configDir))
+                        Directory.CreateDirectory(configDir);
+
+                    if (!File.Exists(configPath))
+                    {
+                        var defaults = new Settings();
+                        Save(defaults);
+                        return defaults;
+                    }
+
+                    var json = File.ReadAllText(configPath);
+                    return ParseJson(json);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[FlatPatternHighlight] Falha ao carregar configurações de '{ConfigPath}': {ex.Message}");
+                    return new Settings();
+                }
+            }
+
+            /// <summary>Salva as configurações no arquivo JSON do usuário.</summary>
+            internal static void Save(Settings s)
+            {
+                try
+                {
+                    if (!Directory.Exists(ConfigDir))
+                        Directory.CreateDirectory(ConfigDir);
+                    File.WriteAllText(ConfigPath, ToJson(s));
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[FlatPatternHighlight] Falha ao salvar configurações em '{ConfigPath}': {ex.Message}");
+                }
+            }
+
+            // =====================================================================
+            // JSON serialization manual (sem dependência externa)
+            // =====================================================================
+
+            private static Settings ParseJson(string json)
+            {
+                var s = new Settings();
+                var map = SimpleJsonParse(json);
+
+                if (map == null) return s;
+
+                TrySet(ref s.ParallelismThreshold, map, nameof(ParallelismThreshold));
+                TrySet(ref s.DiagonalBendThreshold, map, nameof(DiagonalBendThreshold));
+                TrySet(ref s.ArtefactSkipDistanceSq, map, nameof(ArtefactSkipDistanceSq));
+                TrySet(ref s.CutoutSkipRatio, map, nameof(CutoutSkipRatio));
+                TrySet(ref s.SmallEdgeRatio, map, nameof(SmallEdgeRatio));
+                TrySet(ref s.SmallEdgeGuardFactor, map, nameof(SmallEdgeGuardFactor));
+                TrySet(ref s.LaneLengthRatioThreshold, map, nameof(LaneLengthRatioThreshold));
+
+                return s;
+            }
+
+            private static void TrySet(ref double field, Dictionary<string, object> map, string key)
+            {
+                if (map.TryGetValue(key, out var val) && val is double d)
+                    field = d;
+            }
+
+            /// <summary>
+            /// Parseia um JSON simples de um nível (sem arrays ou objetos aninhados).
+            /// Suporta: "chave": 123.45  e  "chave": "texto" (string ignorada).
+            /// </summary>
+            private static Dictionary<string, object> SimpleJsonParse(string json)
+            {
+                var result = new Dictionary<string, object>();
+                json = json.Trim();
+                if (!json.StartsWith("{") || !json.EndsWith("}"))
+                    return null;
+
+                // Remove chaves externas
+                json = json.Substring(1, json.Length - 2).Trim();
+                if (string.IsNullOrEmpty(json))
+                    return result;
+
+                // Split por vírgulas (simples, não lida com strings contendo vírgula)
+                var pairs = SplitTopLevel(json);
+                foreach (var pair in pairs)
+                {
+                    var eqIdx = pair.IndexOf(':');
+                    if (eqIdx < 0) continue;
+
+                    var key = pair.Substring(0, eqIdx).Trim().Trim('"');
+                    var rawVal = pair.Substring(eqIdx + 1).Trim();
+
+                    if (string.IsNullOrEmpty(key)) continue;
+
+                    // Tenta double
+                    if (double.TryParse(rawVal,
+                        System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        out var dval))
+                    {
+                        result[key] = dval;
+                    }
+                }
+
+                return result;
+            }
+
+            /// <summary>Divide por vírgulas no primeiro nível (ignora vírgulas dentro de strings/chaves).</summary>
+            private static List<string> SplitTopLevel(string s)
+            {
+                var parts = new List<string>();
+                int depth = 0, start = 0;
+                for (int i = 0; i < s.Length; i++)
+                {
+                    if (s[i] == '{' || s[i] == '[') depth++;
+                    else if (s[i] == '}' || s[i] == ']') depth--;
+                    else if (s[i] == ',' && depth == 0)
+                    {
+                        parts.Add(s.Substring(start, i - start));
+                        start = i + 1;
+                    }
+                }
+                if (start < s.Length)
+                    parts.Add(s.Substring(start));
+                return parts;
+            }
+
+            private static string ToJson(Settings s)
+            {
+                var ci = System.Globalization.CultureInfo.InvariantCulture;
+                return $"{{\n" +
+                       $"  \"{nameof(s.ParallelismThreshold)}\": {s.ParallelismThreshold.ToString(ci)},\n" +
+                       $"  \"{nameof(s.DiagonalBendThreshold)}\": {s.DiagonalBendThreshold.ToString(ci)},\n" +
+                       $"  \"{nameof(s.ArtefactSkipDistanceSq)}\": {s.ArtefactSkipDistanceSq.ToString(ci)},\n" +
+                       $"  \"{nameof(s.CutoutSkipRatio)}\": {s.CutoutSkipRatio.ToString(ci)},\n" +
+                       $"  \"{nameof(s.SmallEdgeRatio)}\": {s.SmallEdgeRatio.ToString(ci)},\n" +
+                       $"  \"{nameof(s.SmallEdgeGuardFactor)}\": {s.SmallEdgeGuardFactor.ToString(ci)},\n" +
+                       $"  \"{nameof(s.LaneLengthRatioThreshold)}\": {s.LaneLengthRatioThreshold.ToString(ci)}\n" +
+                       "}";
+            }
+        }
+
+        // =====================================================================
+        // VALORES RESOLVIDOS — carregados do Settings do usuário no startup
+        // =====================================================================
+
+        private static readonly Settings Config = Settings.Load();
+
+        private static double ParallelismThreshold => Config.ParallelismThreshold;
+        private static double DiagonalBendThreshold => Config.DiagonalBendThreshold;
+        private static double ArtefactSkipDistanceSq => Config.ArtefactSkipDistanceSq;
+        private static double CutoutSkipRatio => Config.CutoutSkipRatio;
+        private static double SmallEdgeRatio => Config.SmallEdgeRatio;
+        private static double SmallEdgeGuardFactor => Config.SmallEdgeGuardFactor;
+        private static double LaneLengthRatioThreshold => Config.LaneLengthRatioThreshold;
+
+        // Guardas numéricas — não expostas ao usuário (risco de instabilidade)
         private const double MinSegmentLength = 1e-6;
-
-        /// <summary>Guarda de sobreposição: sobreposição mínima ao longo do eixo de direção para um segmento de perímetro ser considerado relevante.</summary>
         private const double OverlapEpsilon = 1e-6;
 
         private static Session theSession;
@@ -149,6 +359,17 @@ namespace FlatPatternHighlight
 
                 // Escreve tudo no LogFile do NX (disponível em Help → Log File).
                 LogFile lw = theSession.LogFile;
+
+                // Garante que o settings.json do usuário existe em %APPDATA%
+                lw.WriteLine("[config] Arquivo de configuração do usuário: " + Settings.ConfigPath);
+                lw.WriteLine($"[config] ParallelismThreshold     = {ParallelismThreshold:F3}");
+                lw.WriteLine($"[config] DiagonalBendThreshold    = {DiagonalBendThreshold:F3}");
+                lw.WriteLine($"[config] ArtefactSkipDistanceSq   = {ArtefactSkipDistanceSq:F6}");
+                lw.WriteLine($"[config] CutoutSkipRatio          = {CutoutSkipRatio:F3}");
+                lw.WriteLine($"[config] SmallEdgeRatio           = {SmallEdgeRatio:F3}");
+                lw.WriteLine($"[config] SmallEdgeGuardFactor     = {SmallEdgeGuardFactor:F3}");
+                lw.WriteLine($"[config] LaneLengthRatioThreshold = {LaneLengthRatioThreshold:F3}");
+                lw.WriteLine("");
 
                 // Localiza a feature FlatPattern — sem ela não há o que analisar.
                 FlatPattern flatPattern = FindFlatPattern(workPart, lw);
