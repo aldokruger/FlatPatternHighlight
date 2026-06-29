@@ -79,6 +79,42 @@ namespace FlatPatternHighlight
         [DllImport("libufun.dll", CallingConvention = CallingConvention.Cdecl)]
         static extern int UF_MODL_delete_loop_list(ref IntPtr loopList);
 
+        // =====================================================================
+        // CONSTANTS — named thresholds used throughout the analysis pipeline
+        // =====================================================================
+
+        /// <summary>Minimum dot product for considering two curve directions as parallel.</summary>
+        private const double ParallelismThreshold = 0.95;
+
+        /// <summary>Minimum direction component (|dir.X| or |dir.Y|) for a bend to be considered "diagonal".
+        /// Diagonal bends have significant components in both UV axes and may lack parallel perimeter segments.</summary>
+        private const double DiagonalBendThreshold = 0.2;
+
+        /// <summary>Squared distance threshold (mm²) for skipping bend lines whose midpoint lies on the outer perimeter.
+        /// Corresponds to a 0.5 mm linear threshold (0.5² = 0.25).</summary>
+        private const double ArtefactSkipDistanceSq = 0.25; // 0.5 mm
+
+        /// <summary>Ratio threshold for cutout detection: if bestDist / secondBestDist is below this,
+        /// the "nearest" perimeter segment is likely a thin notch and should be skipped.</summary>
+        private const double CutoutSkipRatio = 0.3;
+
+        /// <summary>Ratio for SmallEdge correction: if the farthest perimeter segment is shorter than
+        /// SmallEdgeRatio × longestSegment, it's likely a corner notch and should be replaced by the longest.</summary>
+        private const double SmallEdgeRatio = 0.5;
+
+        /// <summary>Guard factor for SmallEdge correction: only replace farthest by longest if
+        /// longestDist >= farDist * SmallEdgeGuardFactor, preventing replacement by a segment too close to the bend.</summary>
+        private const double SmallEdgeGuardFactor = 0.5;
+
+        /// <summary>Minimum length ratio for two bends to be considered similar and thus belong to the same lane.</summary>
+        private const double LaneLengthRatioThreshold = 0.7;
+
+        /// <summary>Minimum segment-projection length to avoid division by zero in direction calculations.</summary>
+        private const double MinSegmentLength = 1e-6;
+
+        /// <summary>Overlap guard: minimum overlap along direction axis for a perimeter segment to be considered relevant.</summary>
+        private const double OverlapEpsilon = 1e-6;
+
         private static Session theSession;
         private static UI theUI;
 
@@ -422,7 +458,7 @@ namespace FlatPatternHighlight
                 if (!(c is Line) && !(c is Arc)) nonLineArcCount++;
                 double du = GetU(e) - GetU(s), dv = GetV(e) - GetV(s);
                 double len = Math.Sqrt(du * du + dv * dv);
-                Vector3d d = len > 1e-6 ? new Vector3d(du / len, dv / len, 0) : new Vector3d(0, 0, 0);
+                Vector3d d = len > MinSegmentLength ? new Vector3d(du / len, dv / len, 0) : new Vector3d(0, 0, 0);
                 perimData.Add((s, e, d, len, c));
                 double su = GetU(s), sv = GetV(s), eu = GetU(e), ev = GetV(e);
                 if (su < bboxMinU) bboxMinU = su; if (su > bboxMaxU) bboxMaxU = su;
@@ -482,7 +518,7 @@ namespace FlatPatternHighlight
                 // Direction and length in the UV plane.
                 double bdu = GetU(be) - GetU(bs), bdv = GetV(be) - GetV(bs);
                 double blen = Math.Sqrt(bdu * bdu + bdv * bdv);
-                if (blen < 1e-6) continue;
+                if (blen < MinSegmentLength) continue;
 
                 Vector3d bdir = new Vector3d(bdu / blen, bdv / blen, 0);
                 // Perpendicular (normal) direction — rotate 90° counter-clockwise.
@@ -503,7 +539,7 @@ namespace FlatPatternHighlight
                         double d2 = (bmid3D.X - cl.X) * (bmid3D.X - cl.X)
                                   + (bmid3D.Y - cl.Y) * (bmid3D.Y - cl.Y)
                                   + (bmid3D.Z - cl.Z) * (bmid3D.Z - cl.Z);
-                        if (d2 < 0.25) { onPerim = true; break; } // 0.5 mm threshold
+                        if (d2 < ArtefactSkipDistanceSq) { onPerim = true; break; }
                     }
                     if (onPerim)
                     {
@@ -581,9 +617,9 @@ namespace FlatPatternHighlight
                         if (absProj < nearDistB) { nearDistB = absProj; nearIdxB = pi; }
                     }
 
-                    // Filter: only curves that are approximately parallel (dot > 0.95).
+                    // Filter: only curves that are approximately parallel (dot >= ParallelismThreshold).
                     double dot = pdir.X * bdir.X + pdir.Y * bdir.Y;
-                    if (Math.Abs(dot) < 0.95) { hasArcs = true; continue; }
+                    if (Math.Abs(dot) < ParallelismThreshold) { hasArcs = true; continue; }
 
                     // Check overlap: the perimeter segment must overlap the bend line's
                     // projection range so we don't match irrelevant segments off to the side.
@@ -591,7 +627,7 @@ namespace FlatPatternHighlight
                     double t2 = (GetU(pe) - GetU(bs)) * bdir.X + (GetV(pe) - GetV(bs)) * bdir.Y;
                     double tMin = Math.Min(t1, t2), tMax = Math.Max(t1, t2);
                     double overlap = Math.Min(blen, tMax) - Math.Max(0, tMin);
-                    if (overlap <= 0) continue;
+                    if (overlap <= OverlapEpsilon) continue;
 
                     double dist = Math.Abs(proj);
 
@@ -634,19 +670,18 @@ namespace FlatPatternHighlight
                 // um segmento longo que esteja muito PRÓXIMO à dobra (e.g. face de
                 // flange a 2.85 mm quando a borda real está a 29.85 mm).
                 // Aplicado a farIdx E a farLineIdx (variante restrita a Line).
-                const double SmallEdgeRatio = 0.5;
                 if (farIdxA >= 0 && longestIdxA >= 0 && perimData[farIdxA].len < SmallEdgeRatio * longestLenA
-                    && longestDistA >= farDistA * 0.5)
+                    && longestDistA >= farDistA * SmallEdgeGuardFactor)
                     farIdxA = longestIdxA;
                 if (farIdxB >= 0 && longestIdxB >= 0 && perimData[farIdxB].len < SmallEdgeRatio * longestLenB
-                    && longestDistB >= farDistB * 0.5)
+                    && longestDistB >= farDistB * SmallEdgeGuardFactor)
                     farIdxB = longestIdxB;
                 // Aplica a mesma correção aos candidatos restritos a Line.
                 if (farLineIdxA >= 0 && longestIdxA >= 0 && perimData[farLineIdxA].len < SmallEdgeRatio * longestLenA
-                    && longestDistA >= farLineDistA * 0.5)
+                    && longestDistA >= farLineDistA * SmallEdgeGuardFactor)
                     farLineIdxA = longestIdxA;
                 if (farLineIdxB >= 0 && longestIdxB >= 0 && perimData[farLineIdxB].len < SmallEdgeRatio * longestLenB
-                    && longestDistB >= farLineDistB * 0.5)
+                    && longestDistB >= farLineDistB * SmallEdgeGuardFactor)
                     farLineIdxB = longestIdxB;
 
                 // Compute the distance from the bend midpoint to the bounding box edge
@@ -680,7 +715,7 @@ namespace FlatPatternHighlight
                 //      mesmo lado — evita o erro 1175009 do builder PMI perpendicular.
                 //   2. Se nenhum candidato paralelo foi encontrado, usa nearIdx (mais
                 //      próximo sem filtro de paralelismo) como último recurso.
-                if (Math.Abs(bdir.X) > 0.2 && Math.Abs(bdir.Y) > 0.2)
+                if (Math.Abs(bdir.X) > DiagonalBendThreshold && Math.Abs(bdir.Y) > DiagonalBendThreshold)
                 {
                     if (bestIdxA >= 0 && !(perimData[bestIdxA].curve is Line) && bestLineIdxA >= 0)
                         bestIdxA = bestLineIdxA;
@@ -719,8 +754,9 @@ namespace FlatPatternHighlight
         private static Point3d ProjectPointOnSegment(Point3d point, Point3d segStart, Point3d segEnd)
         {
             double vx = segEnd.X - segStart.X, vy = segEnd.Y - segStart.Y, vz = segEnd.Z - segStart.Z;
+            const double minLenSq = 1e-12;
             double lenSq = vx * vx + vy * vy + vz * vz;
-            if (lenSq < 1e-12) return segStart;
+            if (lenSq < minLenSq) return segStart;
             double t = ((point.X - segStart.X) * vx + (point.Y - segStart.Y) * vy + (point.Z - segStart.Z) * vz) / lenSq;
             t = Math.Max(0, Math.Min(1, t));
             return new Point3d(segStart.X + t * vx, segStart.Y + t * vy, segStart.Z + t * vz);
@@ -760,7 +796,7 @@ namespace FlatPatternHighlight
                 {
                     if (used[j]) continue;
                     double dot = bendInfos[i].dir.X * bendInfos[j].dir.X + bendInfos[i].dir.Y * bendInfos[j].dir.Y;
-                    if (Math.Abs(dot) >= 0.95) { group.Add(j); used[j] = true; }
+                    if (Math.Abs(dot) >= ParallelismThreshold) { group.Add(j); used[j] = true; }
                 }
 
                 // Split the direction-group into lanes by range overlap.
@@ -1402,7 +1438,8 @@ namespace FlatPatternHighlight
             double t = double.MaxValue;
             foreach (double ti in new[] { txMin, txMax, tyMin, tyMax })
             {
-                if (ti > 1e-6 && ti < t) t = ti;
+                const double rayEpsilon = 1e-6; // skip intersections at/near origin
+                if (ti > rayEpsilon && ti < t) t = ti;
             }
             return t == double.MaxValue ? -1 : t;
         }
