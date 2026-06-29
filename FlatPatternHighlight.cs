@@ -1576,10 +1576,33 @@ namespace FlatPatternHighlight
             Arc arc = curve as Arc;
             if (arc != null)
             {
-                double r = arc.Radius, cx = arc.CenterPoint.X, cy = arc.CenterPoint.Y, cz = arc.CenterPoint.Z;
-                double sa = arc.StartAngle * Math.PI / 180.0, ea = arc.EndAngle * Math.PI / 180.0;
-                p1 = new Point3d(cx + r * Math.Cos(sa), cy + r * Math.Sin(sa), cz);
-                p2 = new Point3d(cx + r * Math.Cos(ea), cy + r * Math.Sin(ea), cz);
+                // StartAngle / EndAngle are in RADIANS — do NOT convert from degrees.
+                // The angles are measured relative to the X and Y axes of the arc's
+                // orientation matrix (Conic.Matrix), so we apply the full 3x3 transform
+                // to compute correct endpoint positions in 3D space.
+                double r = arc.Radius;
+                Point3d c = arc.CenterPoint;
+                double sa = arc.StartAngle;
+                double ea = arc.EndAngle;
+
+                NXMatrix nxMat = arc.Matrix;
+                Matrix3x3 mat = nxMat.Element;
+
+                // Orientation X and Y axes (columns of the 3x3 matrix)
+                Vector3d xDir = new Vector3d(mat.Xx, mat.Xy, mat.Xz);
+                Vector3d yDir = new Vector3d(mat.Yx, mat.Yy, mat.Yz);
+
+                double cosSa = Math.Cos(sa), sinSa = Math.Sin(sa);
+                double cosEa = Math.Cos(ea), sinEa = Math.Sin(ea);
+
+                p1 = new Point3d(
+                    c.X + r * (cosSa * xDir.X + sinSa * yDir.X),
+                    c.Y + r * (cosSa * xDir.Y + sinSa * yDir.Y),
+                    c.Z + r * (cosSa * xDir.Z + sinSa * yDir.Z));
+                p2 = new Point3d(
+                    c.X + r * (cosEa * xDir.X + sinEa * yDir.X),
+                    c.Y + r * (cosEa * xDir.Y + sinEa * yDir.Y),
+                    c.Z + r * (cosEa * xDir.Z + sinEa * yDir.Z));
                 return;
             }
             p1 = new Point3d(0, 0, 0); p2 = new Point3d(0, 0, 0);
