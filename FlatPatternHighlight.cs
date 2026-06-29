@@ -504,11 +504,7 @@ namespace FlatPatternHighlight
             //     bestLineIdx / farLineIdx - mesmas métricas, mas restritas a Line
             //                               (ignora Arc); preferido na dimensão PMI
             // ===================================================================
-            var bendInfos = new List<(int bi, Curve bend, Point3d pt, Point3d bs, Point3d be, Vector3d dir, Vector3d nml,
-                int bestIdxA, int bestIdxB, int farIdxA, int farIdxB, int nearIdxA, int nearIdxB,
-                int bestLineIdxA, int bestLineIdxB, int farLineIdxA, int farLineIdxB,
-                double bestDistA, double bestDistB,
-                int secondBestIdxA, int secondBestIdxB, double secondBestDistA, double secondBestDistB)>();
+            var bendInfos = new List<BendAnalysisInfo>();
 
             for (int bi = 0; bi < bendLines.Count; bi++)
             {
@@ -729,7 +725,24 @@ namespace FlatPatternHighlight
                 if (farIdxB < 0) farIdxB = nearIdxB;
 
                 Point3d bendPoint = new Point3d((bs.X + be.X) / 2, (bs.Y + be.Y) / 2, (bs.Z + be.Z) / 2);
-                bendInfos.Add((bi, bend, bendPoint, bs, be, bdir, nml, bestIdxA, bestIdxB, farIdxA, farIdxB, nearIdxA, nearIdxB, bestLineIdxA, bestLineIdxB, farLineIdxA, farLineIdxB, bestDistA, bestDistB, secondBestIdxA, secondBestIdxB, secondBestDistA, secondBestDistB));
+                bendInfos.Add(new BendAnalysisInfo
+{
+    Index = bi,
+    Bend = bend,
+    MidPoint = bendPoint,
+    StartPoint = bs,
+    EndPoint = be,
+    Direction = bdir,
+    Normal = nml,
+    BestIdxA = bestIdxA, BestIdxB = bestIdxB,
+    FarIdxA = farIdxA, FarIdxB = farIdxB,
+    NearIdxA = nearIdxA, NearIdxB = nearIdxB,
+    BestLineIdxA = bestLineIdxA, BestLineIdxB = bestLineIdxB,
+    FarLineIdxA = farLineIdxA, FarLineIdxB = farLineIdxB,
+    BestDistA = bestDistA, BestDistB = bestDistB,
+    SecondBestIdxA = secondBestIdxA, SecondBestIdxB = secondBestIdxB,
+    SecondBestDistA = secondBestDistA, SecondBestDistB = secondBestDistB
+});
             }
 
             // Create chain PMI dimensions (boundary → nearest bend → next bend → ...).
@@ -775,7 +788,7 @@ namespace FlatPatternHighlight
         /// recortada) são cotadas independentemente.
         /// </summary>
         private static int CreateChainDimensions(Part workPart,
-            List<(int bi, Curve bend, Point3d pt, Point3d bs, Point3d be, Vector3d dir, Vector3d nml, int bestIdxA, int bestIdxB, int farIdxA, int farIdxB, int nearIdxA, int nearIdxB, int bestLineIdxA, int bestLineIdxB, int farLineIdxA, int farLineIdxB, double bestDistA, double bestDistB, int secondBestIdxA, int secondBestIdxB, double secondBestDistA, double secondBestDistB)> bendInfos,
+            List<BendAnalysisInfo> bendInfos,
             List<(Point3d start, Point3d end, Vector3d dir, double len, Curve curve)> perimData,
             List<Curve> outerPerim,
             double bboxMinU, double bboxMinV, double bboxMaxU, double bboxMaxV,
@@ -795,7 +808,7 @@ namespace FlatPatternHighlight
                 for (int j = i + 1; j < bendInfos.Count; j++)
                 {
                     if (used[j]) continue;
-                    double dot = bendInfos[i].dir.X * bendInfos[j].dir.X + bendInfos[i].dir.Y * bendInfos[j].dir.Y;
+                    double dot = bendInfos[i].Direction.X * bendInfos[j].Direction.X + bendInfos[i].Direction.Y * bendInfos[j].Direction.Y;
                     if (Math.Abs(dot) >= ParallelismThreshold) { group.Add(j); used[j] = true; }
                 }
 
@@ -810,11 +823,7 @@ namespace FlatPatternHighlight
             return count;
         }
 
-        /// <summary>
-        /// Threshold for considering two bends as having "similar length".
-        /// A value of 0.7 means the shorter bend must be at least 70% of the longer one.
-        /// </summary>
-        private const double LaneLengthRatioThreshold = 0.7;
+
 
         /// <summary>
         /// Divide um grupo de dobras paralelas em lanes (abas/flanges independentes).
@@ -834,10 +843,10 @@ namespace FlatPatternHighlight
         /// de cotas separada (flange diferente na dobra em U).
         /// </summary>
         private static List<List<int>> ClusterByRangeOverlap(
-            List<(int bi, Curve bend, Point3d pt, Point3d bs, Point3d be, Vector3d dir, Vector3d nml, int bestIdxA, int bestIdxB, int farIdxA, int farIdxB, int nearIdxA, int nearIdxB, int bestLineIdxA, int bestLineIdxB, int farLineIdxA, int farLineIdxB, double bestDistA, double bestDistB, int secondBestIdxA, int secondBestIdxB, double secondBestDistA, double secondBestDistB)> bendInfos,
+            List<BendAnalysisInfo> bendInfos,
             List<int> groupIdx, int uAxis, int vAxis)
         {
-            Vector3d refDir = bendInfos[groupIdx[0]].dir;
+            Vector3d refDir = bendInfos[groupIdx[0]].Direction;
             var lanes = new List<List<int>>();
             var laneRanges = new List<(double lo, double hi)>();
             var laneLens = new List<double>();
@@ -845,8 +854,8 @@ namespace FlatPatternHighlight
             foreach (int gi in groupIdx)
             {
                 var info = bendInfos[gi];
-                double bsU = AxisCoord(info.bs, uAxis), bsV = AxisCoord(info.bs, vAxis);
-                double beU = AxisCoord(info.be, uAxis), beV = AxisCoord(info.be, vAxis);
+                double bsU = AxisCoord(info.StartPoint, uAxis), bsV = AxisCoord(info.StartPoint, vAxis);
+                double beU = AxisCoord(info.EndPoint, uAxis), beV = AxisCoord(info.EndPoint, vAxis);
                 double s = bsU * refDir.X + bsV * refDir.Y;
                 double e = beU * refDir.X + beV * refDir.Y;
                 double lo = Math.Min(s, e), hi = Math.Max(s, e);
@@ -921,7 +930,7 @@ namespace FlatPatternHighlight
         /// do boundary em CreateChainSide.
         /// </summary>
         private static int CreateChainForGroup(Part workPart,
-            List<(int bi, Curve bend, Point3d pt, Point3d bs, Point3d be, Vector3d dir, Vector3d nml, int bestIdxA, int bestIdxB, int farIdxA, int farIdxB, int nearIdxA, int nearIdxB, int bestLineIdxA, int bestLineIdxB, int farLineIdxA, int farLineIdxB, double bestDistA, double bestDistB, int secondBestIdxA, int secondBestIdxB, double secondBestDistA, double secondBestDistB)> bendInfos,
+            List<BendAnalysisInfo> bendInfos,
             List<int> groupIdx,
             List<(Point3d start, Point3d end, Vector3d dir, double len, Curve curve)> perimData,
             List<Curve> outerPerim,
@@ -930,7 +939,7 @@ namespace FlatPatternHighlight
             LogFile lw)
         {
             var refInfo = bendInfos[groupIdx[0]];
-            Vector3d refNml = refInfo.nml;
+            Vector3d refNml = refInfo.Normal;
 
             // Project bbox corners onto the normal direction to find extents.
             double[] cornersOffset = new double[]
@@ -949,9 +958,9 @@ namespace FlatPatternHighlight
             foreach (int gi in groupIdx)
             {
                 var info = bendInfos[gi];
-                double dot = info.dir.X * refInfo.dir.X + info.dir.Y * refInfo.dir.Y;
+                double dot = info.Direction.X * refInfo.Direction.X + info.Direction.Y * refInfo.Direction.Y;
                 bool flipped = dot < 0;
-                double offset = AxisCoord(info.pt, uAxis) * refNml.X + AxisCoord(info.pt, vAxis) * refNml.Y;
+                double offset = AxisCoord(info.MidPoint, uAxis) * refNml.X + AxisCoord(info.MidPoint, vAxis) * refNml.Y;
                 entries.Add((gi, offset, flipped));
             }
 
@@ -990,7 +999,7 @@ namespace FlatPatternHighlight
         /// Cada cota é criada por <see cref="CreatePmiRapidDimension"/>.
         /// </summary>
         private static int CreateChainSide(Part workPart,
-            List<(int bi, Curve bend, Point3d pt, Point3d bs, Point3d be, Vector3d dir, Vector3d nml, int bestIdxA, int bestIdxB, int farIdxA, int farIdxB, int nearIdxA, int nearIdxB, int bestLineIdxA, int bestLineIdxB, int farLineIdxA, int farLineIdxB, double bestDistA, double bestDistB, int secondBestIdxA, int secondBestIdxB, double secondBestDistA, double secondBestDistB)> bendInfos,
+            List<BendAnalysisInfo> bendInfos,
             List<(int idx, double offset, bool flipped)> side,
             List<(Point3d start, Point3d end, Vector3d dir, double len, Curve curve)> perimData,
             List<Curve> outerPerim,
@@ -1020,10 +1029,10 @@ namespace FlatPatternHighlight
             // guard converte em linha indicadora). Fallback para o lado oposto se o
             // lado primário estiver vazio.
             bool useB = isLowSide ^ flipped;
-            int primaryFarLine = useB ? first.farLineIdxB : first.farLineIdxA;
-            int primaryFar     = useB ? first.farIdxB     : first.farIdxA;
-            int secondFarLine  = useB ? first.farLineIdxA : first.farLineIdxB;
-            int secondFar      = useB ? first.farIdxA     : first.farIdxB;
+            int primaryFarLine = useB ? first.FarLineIdxB : first.FarLineIdxA;
+            int primaryFar     = useB ? first.FarIdxB     : first.FarIdxA;
+            int secondFarLine  = useB ? first.FarLineIdxA : first.FarLineIdxB;
+            int secondFar      = useB ? first.FarIdxA     : first.FarIdxB;
 
             int boundaryIdx = primaryFarLine >= 0 ? primaryFarLine
                            : primaryFar     >= 0 ? primaryFar
@@ -1037,19 +1046,19 @@ namespace FlatPatternHighlight
                 // correto. O lado depende de isLowSide e se a dobra está "flipped"
                 // (direção invertida em relação à referência do grupo).
                 int fallbackIdx = isLowSide
-                    ? (flipped ? first.nearIdxA : first.nearIdxB)
-                    : (flipped ? first.nearIdxB : first.nearIdxA);
+                    ? (flipped ? first.NearIdxA : first.NearIdxB)
+                    : (flipped ? first.NearIdxB : first.NearIdxA);
                 if (fallbackIdx >= 0 && perimData[fallbackIdx].curve is Line)
                 {
-                    lw.WriteLine($"  [Chain] Fallback to nearest perimeter for Bend Tag={first.bend.Tag} on {(isLowSide ? "low" : "high")} side. perimTag={perimData[fallbackIdx].curve.Tag}");
+                    lw.WriteLine($"  [Chain] Fallback to nearest perimeter for Bend Tag={first.Bend.Tag} on {(isLowSide ? "low" : "high")} side. perimTag={perimData[fallbackIdx].curve.Tag}");
                     boundaryIdx = fallbackIdx;
                 }
                 else
                 {
-                    lw.WriteLine($"  [Chain] No boundary curve found for Bend Tag={first.bend.Tag} on {(isLowSide ? "low" : "high")} side.");
+                    lw.WriteLine($"  [Chain] No boundary curve found for Bend Tag={first.Bend.Tag} on {(isLowSide ? "low" : "high")} side.");
                 }
             }
-            lw.WriteLine($"  [Chain] Bend[{first.bi}] Tag={first.bend.Tag} isLow={isLowSide} flipped={flipped} useB={useB}" +
+            lw.WriteLine($"  [Chain] Bend[{first.Index}] Tag={first.Bend.Tag} isLow={isLowSide} flipped={flipped} useB={useB}" +
                 $"  primaryFarLine={( primaryFarLine >= 0 ? perimData[primaryFarLine].curve.Tag.ToString() : "-")}" +
                 $"  primaryFar={( primaryFar >= 0 ? perimData[primaryFar].curve.Tag.ToString() : "-")}" +
                 $"  → boundary={(boundaryIdx >= 0 ? perimData[boundaryIdx].curve.Tag.ToString() : "NONE")}");
@@ -1059,7 +1068,7 @@ namespace FlatPatternHighlight
                 var seg = perimData[boundaryIdx];
                 // Projeta o midpoint da dobra sobre o segmento de boundary para obter
                 // o ponto de pick exato sobre a curva (necessário p/ associatividade).
-                Point3d boundaryPoint = ProjectPointOnSegment(first.pt, seg.start, seg.end);
+                Point3d boundaryPoint = ProjectPointOnSegment(first.MidPoint, seg.start, seg.end);
                 if (!(seg.curve is Line))
                 {
                     // --- Boundary é Arc: indicator-line vermelha em vez de cota ---
@@ -1067,10 +1076,10 @@ namespace FlatPatternHighlight
                     // uma Line como 1ª referência. Arcs (fillet de canto) causam o erro
                     // NX 1175009 e o point-fallback daria um valor errado. Em vez disso,
                     // desenhamos uma linha vermelha (cor 36) indicando a distância.
-                    lw.WriteLine($"  [Chain] Boundary for Bend Tag={first.bend.Tag} is {seg.curve.GetType().Name} (not Line) - indicator line only");
+                    lw.WriteLine($"  [Chain] Boundary for Bend Tag={first.Bend.Tag} is {seg.curve.GetType().Name} (not Line) - indicator line only");
                     try
                     {
-                        Line indicator = workPart.Curves.CreateLine(boundaryPoint, first.pt);
+                        Line indicator = workPart.Curves.CreateLine(boundaryPoint, first.MidPoint);
                         indicator.Color = 36;
                         indicator.SetUserAttribute("FlatPatternHighlight", 0, "true", NXOpen.Update.Option.Later);
                     }
@@ -1080,11 +1089,11 @@ namespace FlatPatternHighlight
                 {
                     Point3d origin = CreateChainOrigin(
                         boundaryPoint,
-                        first.pt,
+                        first.MidPoint,
                         0,
                         bboxMinU, bboxMinV, bboxMaxU, bboxMaxV,
                         normalAxis);
-                    if (CreatePmiRapidDimension(workPart, seg.curve, boundaryPoint, first.bend, first.pt, origin, normalAxis, lw))
+                    if (CreatePmiRapidDimension(workPart, seg.curve, boundaryPoint, first.Bend, first.MidPoint, origin, normalAxis, lw))
                         count++;
                 }
             }
@@ -1096,12 +1105,12 @@ namespace FlatPatternHighlight
                 var prev = bendInfos[side[k - 1].idx];
                 var curr = bendInfos[side[k].idx];
                 Point3d origin = CreateChainOrigin(
-                    prev.pt,
-                    curr.pt,
+                    prev.MidPoint,
+                    curr.MidPoint,
                     k,
                     bboxMinU, bboxMinV, bboxMaxU, bboxMaxV,
                     normalAxis);
-                if (CreatePmiRapidDimension(workPart, prev.bend, prev.pt, curr.bend, curr.pt, origin, normalAxis, lw))
+                if (CreatePmiRapidDimension(workPart, prev.Bend, prev.MidPoint, curr.Bend, curr.MidPoint, origin, normalAxis, lw))
                     count++;
             }
 
