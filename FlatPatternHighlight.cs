@@ -135,6 +135,9 @@ namespace FlatPatternHighlight
                 theSession = Session.GetSession();
                 theUI = UI.GetUI();
 
+                // Recarrega configurações do disco (pode ter sido alterado pelo FlatPatternHighlightConfig.dll)
+                Config = Settings.Load();
+
                 // Exige um work part ativo (não apenas um displayed part).
                 Part workPart = theSession.Parts.Work;
                 if (workPart == null)
