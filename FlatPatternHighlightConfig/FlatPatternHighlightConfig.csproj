@@ -34,7 +34,13 @@
   <ItemGroup>
     <EmbeddedResource Include="..\NXSigningResource.res" />
   </ItemGroup>
+
+  <!-- Imagem do logo -->
+  <ItemGroup>
+    <EmbeddedResource Include="images\kw-logo.png" LogicalName="FlatPatternHighlightConfig.images.kw-logo.png" />
+  </ItemGroup>
 </Project>
+
 
 
 

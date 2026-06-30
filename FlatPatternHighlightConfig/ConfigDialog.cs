@@ -13,6 +13,7 @@ namespace FlatPatternHighlight
         private readonly Settings _edit;
 
         // Controles
+        private PictureBox pbLogo;
         private NumericUpDown nudParallelismThreshold;
         private NumericUpDown nudDiagonalBendThreshold;
         private NumericUpDown nudArtefactSkipDistanceSq;
@@ -47,11 +48,28 @@ namespace FlatPatternHighlight
             }
         }
 
+        private static Image LoadLogoImage()
+        {
+            var asm = System.Reflection.Assembly.GetExecutingAssembly();
+            using (var stream = asm.GetManifestResourceStream("FlatPatternHighlightConfig.images.kw-logo.png"))
+            {
+                if (stream != null)
+                    return Image.FromStream(stream);
+            }
+            // Fallback: tenta pelo nome curto (versão alternativa de embedding)
+            using (var stream = asm.GetManifestResourceStream("kw-logo.png"))
+            {
+                if (stream != null)
+                    return Image.FromStream(stream);
+            }
+            return null;
+        }
+
         private void InitializeComponent()
         {
             Text = "FlatPatternHighlight — Configurações";
-            Size = new Size(520, 520);
-            MinimumSize = new Size(480, 460);
+            Size = new Size(520, 560);
+            MinimumSize = new Size(480, 500);
             StartPosition = FormStartPosition.CenterScreen;
             Font = new Font("Segoe UI", 9F);
             FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -59,6 +77,22 @@ namespace FlatPatternHighlight
             MinimizeBox = false;
             ShowIcon = false;
             ShowInTaskbar = false;
+
+            // Logo header
+            pbLogo = new PictureBox
+            {
+                Image = LoadLogoImage(),
+                SizeMode = PictureBoxSizeMode.AutoSize,
+                Location = new Point(12, 8),
+                BackColor = Color.Transparent
+            };
+            var headerPanel = new Panel
+            {
+                Height = pbLogo.Height + 16,
+                Dock = DockStyle.Top,
+                Padding = new Padding(0)
+            };
+            headerPanel.Controls.Add(pbLogo);
 
             var tabControl = new TabControl
             {
@@ -107,6 +141,7 @@ namespace FlatPatternHighlight
             AcceptButton = btnOk;
 
             panelBottom.Controls.AddRange(new Control[] { btnReset, btnCancel, btnOk });
+            Controls.Add(headerPanel);
             Controls.Add(tabControl);
             Controls.Add(panelBottom);
         }
