@@ -1345,13 +1345,44 @@ namespace FlatPatternHighlight
                 double distB = first.BestDistB;
                 if (distA < double.MaxValue && distB < double.MaxValue && distA > 0 && distB > 0)
                 {
-                    bool correctUseB = distB < distA;
-                    if (correctUseB != useB)
+                    // --- Guarda de comprimento do segmento ---
+                    // A comparação BestDist pode ser enganosa quando um dos lados
+                    // tem um segmento muito curto (ex.: arco de 1mm de canto), que
+                    // aparece como nearest mas não é a borda verdadeira.
+                    double lenA = first.BestIdxA >= 0 ? perimData[first.BestIdxA].len : 0;
+                    double lenB = first.BestIdxB >= 0 ? perimData[first.BestIdxB].len : 0;
+                    const double minSegLen = 5.0;
+                    bool validA = lenA >= minSegLen;
+                    bool validB = lenB >= minSegLen;
+
+                    if (validA && validB)
                     {
-                        lw.WriteLine($"  [Chain] Diagonal bend: bbox-based useB={useB}" +
-                            $" (A={distA:F1} B={distB:F1}) → flipping to useB={correctUseB}");
-                        useB = correctUseB;
+                        // --- Ambos os lados têm segmentos razoáveis → usa distância ---
+                        // O lado com a MENOR distância ao segmento paralelo mais
+                        // próximo é a borda da aba (outward).
+                        bool correctUseB = distB < distA;
+                        if (correctUseB != useB)
+                        {
+                            lw.WriteLine($"  [Chain] Diagonal bend: bbox-based useB={useB}" +
+                                $" (A={distA:F1}/{lenA:F1} B={distB:F1}/{lenB:F1}) → flipping to useB={correctUseB}");
+                            useB = correctUseB;
+                        }
                     }
+                    else if (!validA && validB && !useB)
+                    {
+                        // Side A tem segmento muito curto — força Side B
+                        lw.WriteLine($"  [Chain] Diagonal bend: Side A boundary too short" +
+                            $" (len={lenA:F1}<{minSegLen}), forcing Side B (len={lenB:F1})");
+                        useB = true;
+                    }
+                    else if (!validB && validA && useB)
+                    {
+                        // Side B tem segmento muito curto — força Side A
+                        lw.WriteLine($"  [Chain] Diagonal bend: Side B boundary too short" +
+                            $" (len={lenB:F1}<{minSegLen}), forcing Side A (len={lenA:F1})");
+                        useB = false;
+                    }
+                    // else: ambos inválidos ou já no lado correto → mantém bbox
                 }
             }
 
