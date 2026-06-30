@@ -1330,6 +1330,31 @@ namespace FlatPatternHighlight
             // guard converte em linha indicadora). Fallback para o lado oposto se o
             // lado primário estiver vazio.
             bool useB = isLowSide ^ flipped;
+
+            // --- Corrige outward side para dobras diagonais ---
+            // O cálculo de isLow usa a projeção do bbox sobre a normal da dobra,
+            // que é preciso para dobras horizontais/verticais mas pode ser enganoso
+            // para diagonais: a extensão do bbox numa direção diagonal não reflete
+            // a distância real ao perímetro, porque a maioria dos segmentos do
+            // perímetro não é paralela à direção diagonal.
+            // Em vez disso, usa a distância real ao segmento paralelo mais próximo
+            // em cada lado: o lado com a MENOR distância é a borda da aba (outward).
+            if (Math.Abs(first.Direction.X) > DiagonalBendThreshold && Math.Abs(first.Direction.Y) > DiagonalBendThreshold)
+            {
+                double distA = first.BestDistA;
+                double distB = first.BestDistB;
+                if (distA < double.MaxValue && distB < double.MaxValue && distA > 0 && distB > 0)
+                {
+                    bool correctUseB = distB < distA;
+                    if (correctUseB != useB)
+                    {
+                        lw.WriteLine($"  [Chain] Diagonal bend: bbox-based useB={useB}" +
+                            $" (A={distA:F1} B={distB:F1}) → flipping to useB={correctUseB}");
+                        useB = correctUseB;
+                    }
+                }
+            }
+
             int primaryFarLine = useB ? first.FarLineIdxB : first.FarLineIdxA;
             int primaryFar     = useB ? first.FarIdxB     : first.FarIdxA;
             int secondFarLine  = useB ? first.FarLineIdxA : first.FarLineIdxB;
