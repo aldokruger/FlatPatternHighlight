@@ -85,8 +85,8 @@ namespace FlatPatternHighlight
             pbLogo = new PictureBox
             {
                 Image = logoImg,
-                SizeMode = PictureBoxSizeMode.CenterImage,
-                Size = new Size(184, 38),
+                SizeMode = PictureBoxSizeMode.Zoom,
+                Size = new Size(184, 28),
                 Location = new Point(12, 8)
             };
 
