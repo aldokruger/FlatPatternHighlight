@@ -806,6 +806,40 @@ namespace FlatPatternHighlight
         {
             public int VDominantLevel;
             public int UDominantLevel;
+
+            /// <summary>
+            /// Conjunto de valores de cota boundary ja criados (arredondados conforme
+            /// DimensionDecimalPlaces). Evita criar duas cotas com o mesmo valor numerico
+            /// para lanes diferentes cuja primeira dobra esta na mesma distancia do perimetro.
+            /// Chave: distancia formatada (ex.: "23.4" para 1 casa decimal).
+            /// </summary>
+            public HashSet<string> CreatedBoundaryValues = new HashSet<string>();
+
+            /// <summary>
+            /// Retorna true se uma cota com este valor (arredondado) ja foi criada.
+            /// Nao registra — use RegisterBoundaryValue apos criacao bem-sucedida.
+            /// </summary>
+            public bool IsBoundaryValueDuplicate(double distance)
+            {
+                string key = FormatBoundaryKey(distance);
+                return CreatedBoundaryValues.Contains(key);
+            }
+
+            /// <summary>
+            /// Registra um valor de cota boundary como ja criado.
+            /// </summary>
+            public void RegisterBoundaryValue(double distance)
+            {
+                string key = FormatBoundaryKey(distance);
+                CreatedBoundaryValues.Add(key);
+            }
+
+            private static string FormatBoundaryKey(double distance)
+            {
+                return distance.ToString(
+                    "F" + DimensionDecimalPlaces,
+                    System.Globalization.CultureInfo.InvariantCulture);
+            }
         }
 
         /// <summary>
@@ -1278,14 +1312,32 @@ namespace FlatPatternHighlight
                 }
                 else
                 {
-                    Point3d origin = CreateChainOrigin(
-                        boundaryPoint,
-                        first.MidPoint,
-                        0,
-                        bboxMinU, bboxMinV, bboxMaxU, bboxMaxV,
-                        normalAxis, placement);
-                    if (CreatePmiRapidDimension(workPart, seg.curve, boundaryPoint, first.Bend, first.MidPoint, origin, normalAxis, lw))
-                        count++;
+                    // --- Verifica se jah existe uma cota boundary com o mesmo valor ---
+                    // Duas lanes diferentes podem ter a primeira dobra na mesma distancia
+                    // do perimetro (ex.: ambas 23.4mm). Isso geraria cotas redundantes.
+                    double boundaryDist = Math.Sqrt(
+                        (boundaryPoint.X - first.MidPoint.X) * (boundaryPoint.X - first.MidPoint.X) +
+                        (boundaryPoint.Y - first.MidPoint.Y) * (boundaryPoint.Y - first.MidPoint.Y) +
+                        (boundaryPoint.Z - first.MidPoint.Z) * (boundaryPoint.Z - first.MidPoint.Z));
+                    if (placement != null && placement.IsBoundaryValueDuplicate(boundaryDist))
+                    {
+                        lw.WriteLine($"  [Chain] Skipping boundary dim for Bend Tag={first.Bend.Tag} -" +
+                            $" duplicate value {boundaryDist.ToString("F" + DimensionDecimalPlaces)} already created");
+                    }
+                    else
+                    {
+                        Point3d origin = CreateChainOrigin(
+                            boundaryPoint,
+                            first.MidPoint,
+                            0,
+                            bboxMinU, bboxMinV, bboxMaxU, bboxMaxV,
+                            normalAxis, placement);
+                        if (CreatePmiRapidDimension(workPart, seg.curve, boundaryPoint, first.Bend, first.MidPoint, origin, normalAxis, lw))
+                        {
+                            placement?.RegisterBoundaryValue(boundaryDist);
+                            count++;
+                        }
+                    }
                 }
             }
 
