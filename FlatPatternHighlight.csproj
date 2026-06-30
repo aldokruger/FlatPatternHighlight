@@ -8,6 +8,7 @@
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <AssemblyName>FlatPatternHighlight</AssemblyName>
     <RootNamespace>FlatPatternHighlight</RootNamespace>
+    <UseWindowsForms>true</UseWindowsForms>
   </PropertyGroup>
 
   <!-- Ajuste o caminho para sua instalaÃ§Ã£o do NX 2512 -->
@@ -38,6 +39,7 @@
     <Compile Remove="journal-arredondamento.cs" />
   </ItemGroup>
 </Project>
+
 
 
 
