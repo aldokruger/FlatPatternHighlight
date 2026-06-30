@@ -103,7 +103,6 @@ namespace FlatPatternHighlight
         private static double ParallelismThreshold => Config.ParallelismThreshold;
         private static double DiagonalBendThreshold => Config.DiagonalBendThreshold;
         private static double ArtefactSkipDistanceSq => Config.ArtefactSkipDistanceSq;
-        private static double CutoutSkipRatio => Config.CutoutSkipRatio;
         private static double SmallEdgeRatio => Config.SmallEdgeRatio;
         private static double SmallEdgeGuardFactor => Config.SmallEdgeGuardFactor;
         private static double LaneLengthRatioThreshold => Config.LaneLengthRatioThreshold;
@@ -157,7 +156,6 @@ namespace FlatPatternHighlight
                 lw.WriteLine($"[config] ParallelismThreshold     = {ParallelismThreshold:F3}");
                 lw.WriteLine($"[config] DiagonalBendThreshold    = {DiagonalBendThreshold:F3}");
                 lw.WriteLine($"[config] ArtefactSkipDistanceSq   = {ArtefactSkipDistanceSq:F6}");
-                lw.WriteLine($"[config] CutoutSkipRatio          = {CutoutSkipRatio:F3}");
                 lw.WriteLine($"[config] SmallEdgeRatio           = {SmallEdgeRatio:F3}");
                 lw.WriteLine($"[config] SmallEdgeGuardFactor     = {SmallEdgeGuardFactor:F3}");
                 lw.WriteLine($"[config] LaneLengthRatioThreshold = {LaneLengthRatioThreshold:F3}");
@@ -526,11 +524,6 @@ namespace FlatPatternHighlight
             //
             //   Candidatos de perímetro por LADO (A = nml+, B = nml-):
             //     bestIdx / bestDist       - curva PARALELA mais próxima (com overlap)
-            //     secondBestIdx / Dist     - 2ª curva paralela mais próxima;
-            //                               usada para detectar cutout: quando
-            //                               best/secondBest < 0.3, a "mais próxima"
-            //                               é provavelmente um recorte fino e
-            //                               segundo a real.
             //     farIdx                   - curva paralela mais DISTANTE (histórico;
             //                               usado como fallback de borda externa)
             //     nearIdx                  - curva mais próxima SEM filtro de
@@ -582,10 +575,10 @@ namespace FlatPatternHighlight
                 // Rastreia múltiplos candidatos POR LADO (A=nml+, B=nml-) simultaneamente.
                 // Cada variante serve um propósito específico no pipeline de seleção:
                 //
-                //   best / secondBest
-                //     O segmento paralelo mais próximo e o segundo mais próximo. O "best"
-                //     pode ser a face interna de uma flange ou um notch fino colado à dobra
-                //     (ex.: 2.85 mm) em vez da borda exterior real (22.85 mm).
+                //   best
+                //     O segmento paralelo mais próximo. Pode ser a face interna de uma flange
+                //     ou um notch fino colado à dobra (ex.: 2.85 mm) em vez da borda exterior
+                //     real (22.85 mm).
                 //
                 //   far / farLine
                 //     O segmento paralelo mais distante — este é normalmente a BORDA EXTERIOR
@@ -608,8 +601,6 @@ namespace FlatPatternHighlight
                 //     dobras diagonais (onde bestIdx pode ser Arc).
                 double bestDistA = double.MaxValue, bestDistB = double.MaxValue;
                 int bestIdxA = -1, bestIdxB = -1;
-                double secondBestDistA = double.MaxValue, secondBestDistB = double.MaxValue;
-                int secondBestIdxA = -1, secondBestIdxB = -1;
                 double farDistA = -1, farDistB = -1;
                 int farIdxA = -1, farIdxB = -1;
                 double longestLenA = -1, longestLenB = -1;
@@ -666,11 +657,8 @@ namespace FlatPatternHighlight
                     {
                         if (dist < bestDistA)
                         {
-                            secondBestDistA = bestDistA; secondBestIdxA = bestIdxA;
                             bestDistA = dist; bestIdxA = pi;
                         }
-                        else if (dist < secondBestDistA)
-                            { secondBestDistA = dist; secondBestIdxA = pi; }
                         if (dist > farDistA) { farDistA = dist; farIdxA = pi; }
                         if (plen > longestLenA) { longestLenA = plen; longestIdxA = pi; longestDistA = dist; }
                         if (dist < bestLineDistA && perimData[pi].curve is Line) { bestLineDistA = dist; bestLineIdxA = pi; }
@@ -680,11 +668,8 @@ namespace FlatPatternHighlight
                     {
                         if (dist < bestDistB)
                         {
-                            secondBestDistB = bestDistB; secondBestIdxB = bestIdxB;
                             bestDistB = dist; bestIdxB = pi;
                         }
-                        else if (dist < secondBestDistB)
-                            { secondBestDistB = dist; secondBestIdxB = pi; }
                         if (dist > farDistB) { farDistB = dist; farIdxB = pi; }
                         if (plen > longestLenB) { longestLenB = plen; longestIdxB = pi; longestDistB = dist; }
                         if (dist < bestLineDistB && perimData[pi].curve is Line) { bestLineDistB = dist; bestLineIdxB = pi; }
@@ -724,15 +709,11 @@ namespace FlatPatternHighlight
                 lw.WriteLine($"  Bend[{bi}] Tag={bend.Tag}  Mid=({mu:F1},{mv:F1})  Dir=({bdir.X:F3},{bdir.Y:F3})  Len={blen:F1}");
                 lw.WriteLine($"    Side A (nml+): nearest={bestDistA,8:F2}  bboxDist={sideADist,8:F2}" +
                     (bestIdxA >= 0 ? $"  perimTag={outerPerim[bestIdxA].Tag}" : "  (none)"));
-                lw.WriteLine($"                   2ndNearest={secondBestDistA,8:F2}" +
-                    (secondBestIdxA >= 0 ? $"  perimTag={perimData[secondBestIdxA].curve.Tag}" : "  (none)"));
                 lw.WriteLine($"                   farthest  ={farDistA,8:F2}" +
                     (farIdxA >= 0 ? $"  perimTag={perimData[farIdxA].curve.Tag}  segLen={perimData[farIdxA].len:F1}" : "  (none)"));
 
                 lw.WriteLine($"    Side B (nml-): nearest={bestDistB,8:F2}  bboxDist={sideBDist,8:F2}" +
                     (bestIdxB >= 0 ? $"  perimTag={outerPerim[bestIdxB].Tag}" : "  (none)"));
-                lw.WriteLine($"                   2ndNearest={secondBestDistB,8:F2}" +
-                    (secondBestIdxB >= 0 ? $"  perimTag={perimData[secondBestIdxB].curve.Tag}" : "  (none)"));
                 lw.WriteLine($"                   farthest  ={farDistB,8:F2}" +
                     (farIdxB >= 0 ? $"  perimTag={perimData[farIdxB].curve.Tag}  segLen={perimData[farIdxB].len:F1}" : "  (none)"));
 
@@ -774,9 +755,7 @@ namespace FlatPatternHighlight
     NearIdxA = nearIdxA, NearIdxB = nearIdxB,
     BestLineIdxA = bestLineIdxA, BestLineIdxB = bestLineIdxB,
     FarLineIdxA = farLineIdxA, FarLineIdxB = farLineIdxB,
-    BestDistA = bestDistA, BestDistB = bestDistB,
-    SecondBestIdxA = secondBestIdxA, SecondBestIdxB = secondBestIdxB,
-    SecondBestDistA = secondBestDistA, SecondBestDistB = secondBestDistB
+    BestDistA = bestDistA, BestDistB = bestDistB
 });
             }
 

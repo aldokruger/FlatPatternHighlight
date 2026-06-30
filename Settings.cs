@@ -29,13 +29,6 @@ namespace FlatPatternHighlight
         public double ArtefactSkipDistanceSq = 0.25;
 
         /// <summary>
-        /// Limiar de proporção para detecção de recorte: se bestDist / secondBestDist estiver
-        /// abaixo disso, o segmento de perímetro "mais próximo" é provavelmente um entalhe fino
-        /// e deve ser ignorado.
-        /// </summary>
-        public double CutoutSkipRatio = 0.3;
-
-        /// <summary>
         /// Proporção para correção SmallEdge: se o segmento de perímetro mais distante for
         /// mais curto que SmallEdgeRatio × longestSegment, é provavelmente um entalhe de canto
         /// e deve ser substituído pelo mais longo.
@@ -149,7 +142,6 @@ namespace FlatPatternHighlight
             TrySet(ref s.ParallelismThreshold, map, nameof(ParallelismThreshold));
             TrySet(ref s.DiagonalBendThreshold, map, nameof(DiagonalBendThreshold));
             TrySet(ref s.ArtefactSkipDistanceSq, map, nameof(ArtefactSkipDistanceSq));
-            TrySet(ref s.CutoutSkipRatio, map, nameof(CutoutSkipRatio));
             TrySet(ref s.SmallEdgeRatio, map, nameof(SmallEdgeRatio));
             TrySet(ref s.SmallEdgeGuardFactor, map, nameof(SmallEdgeGuardFactor));
             TrySet(ref s.LaneLengthRatioThreshold, map, nameof(LaneLengthRatioThreshold));
@@ -244,7 +236,6 @@ namespace FlatPatternHighlight
                    $"  \"{nameof(s.ParallelismThreshold)}\": {s.ParallelismThreshold.ToString(ci)},\n" +
                    $"  \"{nameof(s.DiagonalBendThreshold)}\": {s.DiagonalBendThreshold.ToString(ci)},\n" +
                    $"  \"{nameof(s.ArtefactSkipDistanceSq)}\": {s.ArtefactSkipDistanceSq.ToString(ci)},\n" +
-                   $"  \"{nameof(s.CutoutSkipRatio)}\": {s.CutoutSkipRatio.ToString(ci)},\n" +
                    $"  \"{nameof(s.SmallEdgeRatio)}\": {s.SmallEdgeRatio.ToString(ci)},\n" +
                    $"  \"{nameof(s.SmallEdgeGuardFactor)}\": {s.SmallEdgeGuardFactor.ToString(ci)},\n" +
                    $"  \"{nameof(s.LaneLengthRatioThreshold)}\": {s.LaneLengthRatioThreshold.ToString(ci)},\n" +

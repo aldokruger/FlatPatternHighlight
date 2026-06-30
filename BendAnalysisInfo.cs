@@ -6,14 +6,12 @@ namespace FlatPatternHighlight
     /// Resultado consolidado da análise para uma única linha de centro de dobra.
     ///
     ///  Armazena a geometria da dobra (ponto médio, extremidades, direção, normal perpendicular),
-    ///  mais até seis índices candidatos de curva de perímetro por lado (A = nml+, B = nml-).
+    ///  mais índices candidatos de curva de perímetro por lado (A = nml+, B = nml-).
     ///  Cada variante candidata tem uma função específica no pipeline de seleção de contorno:
     ///
-    ///     best / secondBest
-    ///         O segmento paralelo mais próximo e o segundo mais próximo. "best" pode ser a face
-    ///         interna de uma aba ou um entalhe colado à dobra (ex.: 2.85 mm) em vez
-    ///     the true outer boundary (e.g. 22.85 mm). When bestDist / secondBestDist &lt; CutoutSkipRatio,
-    ///         o mais próximo é um entalhe fino e secondBest deve ser usado em seu lugar.
+    ///     best
+    ///         O segmento paralelo mais próximo. Pode ser a face interna de uma aba ou
+    ///         um entalhe colado à dobra (ex.: 2.85 mm) em vez da borda externa verdadeira.
     ///
     ///     far / farLine
     ///         O segmento paralelo mais distante — normalmente a VERDADEIRA borda externa. farLine
@@ -59,9 +57,6 @@ namespace FlatPatternHighlight
         /// <summary>Índice do segmento de perímetro paralelo mais próximo (Lado A).</summary>
         public int BestIdxA { get; set; } = -1;
 
-        /// <summary>Índice do segundo segmento de perímetro paralelo mais próximo (Lado A).</summary>
-        public int SecondBestIdxA { get; set; } = -1;
-
         /// <summary>Índice do segmento de perímetro paralelo mais distante (Lado A).</summary>
         public int FarIdxA { get; set; } = -1;
 
@@ -78,9 +73,6 @@ namespace FlatPatternHighlight
 
         /// <summary>Índice do segmento de perímetro paralelo mais próximo (Lado B).</summary>
         public int BestIdxB { get; set; } = -1;
-
-        /// <summary>Índice do segundo segmento de perímetro paralelo mais próximo (Lado B).</summary>
-        public int SecondBestIdxB { get; set; } = -1;
 
         /// <summary>Índice do segmento de perímetro paralelo mais distante (Lado B).</summary>
         public int FarIdxB { get; set; } = -1;
@@ -99,15 +91,9 @@ namespace FlatPatternHighlight
         /// <summary>Distância do segmento paralelo mais próximo (Lado A).</summary>
         public double BestDistA { get; set; } = double.MaxValue;
 
-        /// <summary>Distância do segundo segmento paralelo mais próximo (Lado A).</summary>
-        public double SecondBestDistA { get; set; } = double.MaxValue;
-
         // ── Distances — Side B ───────────────────────────────────────────
 
         /// <summary>Distância do segmento paralelo mais próximo (Lado B).</summary>
         public double BestDistB { get; set; } = double.MaxValue;
-
-        /// <summary>Distância do segundo segmento paralelo mais próximo (Lado B).</summary>
-        public double SecondBestDistB { get; set; } = double.MaxValue;
     }
 }

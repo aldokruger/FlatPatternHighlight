@@ -16,7 +16,6 @@ namespace FlatPatternHighlight
         private NumericUpDown nudParallelismThreshold;
         private NumericUpDown nudDiagonalBendThreshold;
         private NumericUpDown nudArtefactSkipDistanceSq;
-        private NumericUpDown nudCutoutSkipRatio;
         private NumericUpDown nudSmallEdgeRatio;
         private NumericUpDown nudSmallEdgeGuardFactor;
         private NumericUpDown nudLaneLengthRatioThreshold;
@@ -134,10 +133,7 @@ namespace FlatPatternHighlight
             AddRow(tbl, 2, "ArtefactSkipDistanceSq",
                    "Distância² (mm²) para ignorar dobra no perímetro",
                    out nudArtefactSkipDistanceSq, 0.0m, 10.0m, 0.05m, 4);
-            AddRow(tbl, 3, "CutoutSkipRatio",
-                   "Proporção bestDist/secondBestDist para ignorar entalhe",
-                   out nudCutoutSkipRatio, 0.0m, 1.0m, 0.05m, 4);
-            AddRow(tbl, 4, "SmallEdgeRatio",
+            AddRow(tbl, 3, "SmallEdgeRatio",
                    "Proporção para correção de segmento curto",
                    out nudSmallEdgeRatio, 0.0m, 1.0m, 0.05m, 4);
             AddRow(tbl, 5, "SmallEdgeGuardFactor",
@@ -241,7 +237,6 @@ namespace FlatPatternHighlight
             nudParallelismThreshold.Value = (decimal)_edit.ParallelismThreshold;
             nudDiagonalBendThreshold.Value = (decimal)_edit.DiagonalBendThreshold;
             nudArtefactSkipDistanceSq.Value = (decimal)_edit.ArtefactSkipDistanceSq;
-            nudCutoutSkipRatio.Value = (decimal)_edit.CutoutSkipRatio;
             nudSmallEdgeRatio.Value = (decimal)_edit.SmallEdgeRatio;
             nudSmallEdgeGuardFactor.Value = (decimal)_edit.SmallEdgeGuardFactor;
             nudLaneLengthRatioThreshold.Value = (decimal)_edit.LaneLengthRatioThreshold;
@@ -254,7 +249,6 @@ namespace FlatPatternHighlight
             _edit.ParallelismThreshold = (double)nudParallelismThreshold.Value;
             _edit.DiagonalBendThreshold = (double)nudDiagonalBendThreshold.Value;
             _edit.ArtefactSkipDistanceSq = (double)nudArtefactSkipDistanceSq.Value;
-            _edit.CutoutSkipRatio = (double)nudCutoutSkipRatio.Value;
             _edit.SmallEdgeRatio = (double)nudSmallEdgeRatio.Value;
             _edit.SmallEdgeGuardFactor = (double)nudSmallEdgeGuardFactor.Value;
             _edit.LaneLengthRatioThreshold = (double)nudLaneLengthRatioThreshold.Value;
@@ -268,7 +262,6 @@ namespace FlatPatternHighlight
             nudParallelismThreshold.Value = (decimal)defaults.ParallelismThreshold;
             nudDiagonalBendThreshold.Value = (decimal)defaults.DiagonalBendThreshold;
             nudArtefactSkipDistanceSq.Value = (decimal)defaults.ArtefactSkipDistanceSq;
-            nudCutoutSkipRatio.Value = (decimal)defaults.CutoutSkipRatio;
             nudSmallEdgeRatio.Value = (decimal)defaults.SmallEdgeRatio;
             nudSmallEdgeGuardFactor.Value = (decimal)defaults.SmallEdgeGuardFactor;
             nudLaneLengthRatioThreshold.Value = (decimal)defaults.LaneLengthRatioThreshold;
@@ -283,7 +276,6 @@ namespace FlatPatternHighlight
                 ParallelismThreshold = src.ParallelismThreshold,
                 DiagonalBendThreshold = src.DiagonalBendThreshold,
                 ArtefactSkipDistanceSq = src.ArtefactSkipDistanceSq,
-                CutoutSkipRatio = src.CutoutSkipRatio,
                 SmallEdgeRatio = src.SmallEdgeRatio,
                 SmallEdgeGuardFactor = src.SmallEdgeGuardFactor,
                 LaneLengthRatioThreshold = src.LaneLengthRatioThreshold,
@@ -297,7 +289,6 @@ namespace FlatPatternHighlight
             dst.ParallelismThreshold = src.ParallelismThreshold;
             dst.DiagonalBendThreshold = src.DiagonalBendThreshold;
             dst.ArtefactSkipDistanceSq = src.ArtefactSkipDistanceSq;
-            dst.CutoutSkipRatio = src.CutoutSkipRatio;
             dst.SmallEdgeRatio = src.SmallEdgeRatio;
             dst.SmallEdgeGuardFactor = src.SmallEdgeGuardFactor;
             dst.LaneLengthRatioThreshold = src.LaneLengthRatioThreshold;
