@@ -808,50 +808,29 @@ namespace FlatPatternHighlight
             public int UDominantLevel;
 
             /// <summary>
-            /// Conjunto de valores de cota boundary ja criados (arredondados conforme
-            /// DimensionDecimalPlaces, com direcao). A chave inclui a direcao dominante
-            /// da cota (ex.: "23.4|U+") para que cotas no mesmo valor em lados opostos
-            /// da peca (ex.: esquerda vs direita) permanecam independentes.
+            /// Conjunto de chaves de cota boundary ja criadas. A chave e' fornecida
+            /// pelo chamador (que tem todo o contexto: isLowSide, normalAxis, etc.)
+            /// para que cotas no mesmo valor mas em lados opostos da peca permanecam
+            /// independentes.
             /// </summary>
-            public HashSet<string> CreatedBoundaryValues = new HashSet<string>();
+            public HashSet<string> CreatedBoundaryKeys = new HashSet<string>();
 
             /// <summary>
-            /// Retorna true se uma cota com este valor (arredondado) e direcao ja foi
-            /// criada. Nao registra — use RegisterBoundaryValue apos criacao bem-sucedida.
+            /// Retorna true se uma cota com esta chave ja foi criada.
+            /// Nao registra — use RegisterBoundaryKey apos criacao bem-sucedida.
             /// </summary>
-            public bool IsBoundaryValueDuplicate(double distance, Point3d from, Point3d to)
+            public bool IsKeyDuplicate(string key)
             {
-                string key = FormatBoundaryKey(distance, from, to);
-                return CreatedBoundaryValues.Contains(key);
+                return key != null && CreatedBoundaryKeys.Contains(key);
             }
 
             /// <summary>
-            /// Registra um valor de cota boundary como ja criado.
+            /// Registra uma chave de cota boundary como ja criada.
             /// </summary>
-            public void RegisterBoundaryValue(double distance, Point3d from, Point3d to)
+            public void RegisterBoundaryKey(string key)
             {
-                string key = FormatBoundaryKey(distance, from, to);
-                CreatedBoundaryValues.Add(key);
-            }
-
-            /// <summary>
-            /// Formata a chave = "{distancia}|{direcao}". A direcao e' a componente
-            /// dominante do vetor (to - from): "U+", "U-", "V+" ou "V-". Isto separa
-            /// cotas no mesmo valor mas em lados opostos (ex.: aba esquerda vs direita).
-            /// <summary>
-            private static string FormatBoundaryKey(double distance, Point3d from, Point3d to)
-            {
-                string value = distance.ToString(
-                    "F" + DimensionDecimalPlaces,
-                    System.Globalization.CultureInfo.InvariantCulture);
-                double dU = to.X - from.X;
-                double dV = to.Y - from.Y;
-                string dir;
-                if (Math.Abs(dU) >= Math.Abs(dV))
-                    dir = dU >= 0 ? "U+" : "U-";
-                else
-                    dir = dV >= 0 ? "V+" : "V-";
-                return value + "|" + dir;
+                if (key != null)
+                    CreatedBoundaryKeys.Add(key);
             }
         }
 
@@ -1332,10 +1311,15 @@ namespace FlatPatternHighlight
                         (boundaryPoint.X - first.MidPoint.X) * (boundaryPoint.X - first.MidPoint.X) +
                         (boundaryPoint.Y - first.MidPoint.Y) * (boundaryPoint.Y - first.MidPoint.Y) +
                         (boundaryPoint.Z - first.MidPoint.Z) * (boundaryPoint.Z - first.MidPoint.Z));
-                    if (placement != null && placement.IsBoundaryValueDuplicate(boundaryDist, first.MidPoint, boundaryPoint))
+                    // --- Chave de deduplicacao: valor + curva de perimetro ---
+                    // A curva de perimetro identifica UNICAMENTE qual segmento de borda
+                    // esta sendo cotado. Duas lanes na MESMA borda com o mesmo valor
+                    // sao redundantes. Duas lanes em bordas OPOSTAS sao independentes.
+                    string dedupKey = $"{boundaryDist.ToString("F" + DimensionDecimalPlaces, System.Globalization.CultureInfo.InvariantCulture)}|Tag{seg.curve.Tag}";
+                    if (placement != null && placement.IsKeyDuplicate(dedupKey))
                     {
                         lw.WriteLine($"  [Chain] Skipping boundary dim for Bend Tag={first.Bend.Tag} -" +
-                            $" duplicate value {boundaryDist.ToString("F" + DimensionDecimalPlaces)} already created");
+                            $" duplicate key [{dedupKey}] already created");
                     }
                     else
                     {
@@ -1347,7 +1331,7 @@ namespace FlatPatternHighlight
                             normalAxis, placement);
                         if (CreatePmiRapidDimension(workPart, seg.curve, boundaryPoint, first.Bend, first.MidPoint, origin, normalAxis, lw))
                         {
-                            placement?.RegisterBoundaryValue(boundaryDist, first.MidPoint, boundaryPoint);
+                            placement?.RegisterBoundaryKey(dedupKey);
                             count++;
                         }
                     }
