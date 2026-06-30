@@ -611,6 +611,9 @@ namespace FlatPatternHighlight
                 double longestLenA = -1, longestLenB = -1;
                 int longestIdxA = -1, longestIdxB = -1;
                 double longestDistA = -1, longestDistB = -1;
+                double longestLineLenA = -1, longestLineLenB = -1;
+                int longestLineIdxA = -1, longestLineIdxB = -1;
+                double longestLineDistA = -1, longestLineDistB = -1;
                 double nearDistA = double.MaxValue, nearDistB = double.MaxValue;
                 int nearIdxA = -1, nearIdxB = -1;
                 double bestLineDistA = double.MaxValue, bestLineDistB = double.MaxValue;
@@ -666,6 +669,7 @@ namespace FlatPatternHighlight
                         }
                         if (dist > farDistA) { farDistA = dist; farIdxA = pi; }
                         if (plen > longestLenA) { longestLenA = plen; longestIdxA = pi; longestDistA = dist; }
+                        if (perimData[pi].curve is Line && plen > longestLineLenA) { longestLineLenA = plen; longestLineIdxA = pi; longestLineDistA = dist; }
                         if (dist < bestLineDistA && perimData[pi].curve is Line) { bestLineDistA = dist; bestLineIdxA = pi; }
                         if (dist > farLineDistA && perimData[pi].curve is Line) { farLineDistA = dist; farLineIdxA = pi; }
                     }
@@ -677,6 +681,7 @@ namespace FlatPatternHighlight
                         }
                         if (dist > farDistB) { farDistB = dist; farIdxB = pi; }
                         if (plen > longestLenB) { longestLenB = plen; longestIdxB = pi; longestDistB = dist; }
+                        if (perimData[pi].curve is Line && plen > longestLineLenB) { longestLineLenB = plen; longestLineIdxB = pi; longestLineDistB = dist; }
                         if (dist < bestLineDistB && perimData[pi].curve is Line) { bestLineDistB = dist; bestLineIdxB = pi; }
                         if (dist > farLineDistB && perimData[pi].curve is Line) { farLineDistB = dist; farLineIdxB = pi; }
                     }
@@ -697,13 +702,13 @@ namespace FlatPatternHighlight
                 if (farIdxB >= 0 && longestIdxB >= 0 && perimData[farIdxB].len < SmallEdgeRatio * longestLenB
                     && longestDistB >= farDistB * SmallEdgeGuardFactor)
                     farIdxB = longestIdxB;
-                // Aplica a mesma correção aos candidatos restritos a Line.
-                if (farLineIdxA >= 0 && longestIdxA >= 0 && perimData[farLineIdxA].len < SmallEdgeRatio * longestLenA
-                    && longestDistA >= farLineDistA * SmallEdgeGuardFactor)
-                    farLineIdxA = longestIdxA;
-                if (farLineIdxB >= 0 && longestIdxB >= 0 && perimData[farLineIdxB].len < SmallEdgeRatio * longestLenB
-                    && longestDistB >= farLineDistB * SmallEdgeGuardFactor)
-                    farLineIdxB = longestIdxB;
+                // Aplica a mesma correção aos candidatos restritos a Line, usando longestLine (somente Lines).
+                if (farLineIdxA >= 0 && longestLineIdxA >= 0 && perimData[farLineIdxA].len < SmallEdgeRatio * longestLineLenA
+                    && longestLineDistA >= farLineDistA * SmallEdgeGuardFactor)
+                    farLineIdxA = longestLineIdxA;
+                if (farLineIdxB >= 0 && longestLineIdxB >= 0 && perimData[farLineIdxB].len < SmallEdgeRatio * longestLineLenB
+                    && longestLineDistB >= farLineDistB * SmallEdgeGuardFactor)
+                    farLineIdxB = longestLineIdxB;
 
                 // Calcula a distância do ponto médio da dobra até a borda do bounding box
                 // ao longo de cada direção normal.
