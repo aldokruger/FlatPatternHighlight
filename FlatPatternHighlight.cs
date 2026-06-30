@@ -368,7 +368,7 @@ namespace FlatPatternHighlight
                 lw.WriteLine($"[config] CutoutSkipRatio          = {CutoutSkipRatio:F3}");
                 lw.WriteLine($"[config] SmallEdgeRatio           = {SmallEdgeRatio:F3}");
                 lw.WriteLine($"[config] SmallEdgeGuardFactor     = {SmallEdgeGuardFactor:F3}");
-                lw.WriteLine($"[config] LaneLengthRatioThreshold = {LaneLengthRatioThreshold:F3}");
+                lw.WriteLine($"[config] LaneLengthRatioThreshold = {LaneLengthRatioThreshold:F3}  (not used — grouped by range overlap only)");
                 lw.WriteLine("");
 
                 // Localiza a feature FlatPattern — sem ela não há o que analisar.
@@ -1023,10 +1023,14 @@ namespace FlatPatternHighlight
         /// cada lane via <see cref="CreateChainForGroup"/>.
         ///
         /// "Lane" = conjunto de dobras paralelas com sobreposição de range (projeção ao longo
-        /// da direção da dobra) E comprimentos similares (>= 70%). Dobras na mesma lane
-        /// pertencem à mesma aba/flange e são cotadas em uma única cadeia.
-        /// Dobras em lanes diferentes (ex.: aba esquerda vs direita, ou flange total vs flange
-        /// recortada) são cotadas independentemente.
+        /// da direção da dobra). Dobras na mesma lane pertencem à mesma região e são
+        /// cotadas em uma única cadeia. Dobras em lanes diferentes (ex.: aba esquerda vs
+        /// direita) são cotadas independentemente.
+        ///
+        /// NOTA: O filtro de comprimento similar foi removido intencionalmente. Flanges
+        /// de comprimentos diferentes no mesmo nível Y (ex.: recorte parcial vs aba inteira)
+        /// precisam pertencer à mesma lane para formar uma cadeia contínua. Dimensões zero
+        /// entre dobras no mesmo offset são suprimidas na criação da cadeia.
         /// </summary>
         private static int CreateChainDimensions(Part workPart,
             List<BendAnalysisInfo> bendInfos,
@@ -1072,16 +1076,17 @@ namespace FlatPatternHighlight
         /// Algoritmo (dois passos):
         ///   1. Atribuição greedy: para cada dobra, projeta seus endpoints na direção
         ///      de referência do grupo (refDir) para obter [lo, hi]. Coloca a dobra na
-        ///      primeira lane existente que:
-        ///        (a) tenha sobreposição de range com [lo, hi], E
-        ///        (b) tenha comprimento similar (ratio >= LaneLengthRatioThreshold = 0.7).
+        ///      primeira lane existente que tenha sobreposição de range com [lo, hi].
         ///      Se nenhuma lane combinar, cria uma nova lane.
+        ///      NOTA: O filtro de comprimento similar (LaneLengthRatioThreshold) foi
+        ///      removido porque flanges de comprimentos diferentes no mesmo nível Y
+        ///      (ex.: recorte parcial vs aba inteira) precisam pertencer à MESMA lane
+        ///      para formar uma cadeia de cotas contínua. O skew de comprimento não
+        ///      determina a posição na cadeia — quem determina é o offset ao longo
+        ///      da normal. Dimensões zero entre dobras no mesmo offset são suprimidas
+        ///      em CreateChainSide.
         ///   2. Consolidação: repete até convergência, fundindo pares de lanes que se
         ///      tornaram sobrepostas após extensões de range causadas pelas atribuições.
-        ///
-        /// Propósito: distinguir a aba horizontal inteira (ex.: 337 mm) de uma aba
-        /// recortada menor (ex.: 271 mm) que, mesmo paralela, pertence a uma cadeia
-        /// de cotas separada (flange diferente na dobra em U).
         /// </summary>
         private static List<List<int>> ClusterByRangeOverlap(
             List<BendAnalysisInfo> bendInfos,
@@ -1106,8 +1111,7 @@ namespace FlatPatternHighlight
                 for (int k = 0; k < lanes.Count; k++)
                 {
                     bool overlaps = lo <= laneRanges[k].hi && hi >= laneRanges[k].lo;
-                    bool similarLength = Math.Min(len, laneLens[k]) / Math.Max(len, laneLens[k]) >= LaneLengthRatioThreshold;
-                    if (overlaps && similarLength)
+                    if (overlaps)
                     {
                         lanes[k].Add(gi);
                         laneRanges[k] = (Math.Min(laneRanges[k].lo, lo), Math.Max(laneRanges[k].hi, hi));
@@ -1134,8 +1138,7 @@ namespace FlatPatternHighlight
                     for (int b = a + 1; b < lanes.Count; b++)
                     {
                         bool overlaps = laneRanges[a].lo <= laneRanges[b].hi && laneRanges[a].hi >= laneRanges[b].lo;
-                        bool similarLength = Math.Min(laneLens[a], laneLens[b]) / Math.Max(laneLens[a], laneLens[b]) >= LaneLengthRatioThreshold;
-                        if (overlaps && similarLength)
+                        if (overlaps)
                         {
                             lanes[a].AddRange(lanes[b]);
                             laneRanges[a] = (Math.Min(laneRanges[a].lo, laneRanges[b].lo), Math.Max(laneRanges[a].hi, laneRanges[b].hi));
@@ -1341,10 +1344,30 @@ namespace FlatPatternHighlight
 
             // --- Cotas entre dobras consecutivas da cadeia ---
             // (sem boundary: midpoint→midpoint das dobras vizinhas)
+            //
+            // Pula dobras no mesmo offset (mesmo Y / mesmo nível) — são flanges
+            // paralelas diferentes na mesma borda (ex.: recorte central + flanges
+            // laterais). A distância perpendicular entre elas é ~0 e não deve
+            // gerar cota. O chain conecta corretamente a primeira dobra do nível
+            // superior à primeira dobra do nível inferior.
             for (int k = 1; k < side.Count; k++)
             {
                 var prev = bendInfos[side[k - 1].idx];
                 var curr = bendInfos[side[k].idx];
+
+                // Calcula a distância perpendicular entre as duas dobras paralelas.
+                // Se for menor que o threshold, são dobras no mesmo nível — pula.
+                double du = curr.MidPoint.X - prev.MidPoint.X;
+                double dv = curr.MidPoint.Y - prev.MidPoint.Y;
+                double dw = curr.MidPoint.Z - prev.MidPoint.Z;
+                double perpDist = Math.Abs(du * prev.Normal.X + dv * prev.Normal.Y + dw * prev.Normal.Z);
+                const double sameLevelThreshold = 0.5;
+                if (perpDist < sameLevelThreshold)
+                {
+                    lw.WriteLine($"  [Chain] Skipping dim between Bend[{prev.Index}] and Bend[{curr.Index}] — same level (dist={perpDist:F3})");
+                    continue;
+                }
+
                 Point3d origin = CreateChainOrigin(
                     prev.MidPoint,
                     curr.MidPoint,
