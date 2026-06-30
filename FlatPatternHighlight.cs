@@ -1359,6 +1359,26 @@ namespace FlatPatternHighlight
                     lw.WriteLine($"  [Chain] No boundary curve found for Bend Tag={first.Bend.Tag} on {(isLowSide ? "low" : "high")} side.");
                 }
             }
+
+            // --- Fallback para boundary curto (entalhe/canto) ---
+            // Se o segmento de boundary for muito curto (< 10mm), é provavelmente
+            // um entalhe de canto que passou no filtro de paralelismo mas não é a
+            // borda verdadeira. Tenta o nearIdx do mesmo lado (candidato sem filtro
+            // de paralelismo). Isso corrige dobras diagonais onde o filtro
+            // |dot|>=0.95 é muito restritivo e deixa apenas entalhes de canto como
+            // candidatos paralelos.
+            if (boundaryIdx >= 0 && perimData[boundaryIdx].len < 10.0)
+            {
+                int nearFallback = useB ? first.NearIdxB : first.NearIdxA;
+                if (nearFallback >= 0 && nearFallback != boundaryIdx)
+                {
+                    lw.WriteLine($"  [Chain] Boundary too short (len={perimData[boundaryIdx].len:F1})," +
+                        $" fallback to nearIdx Tag={perimData[nearFallback].curve.Tag}" +
+                        $" (len={perimData[nearFallback].len:F1})");
+                    boundaryIdx = nearFallback;
+                }
+            }
+
             lw.WriteLine($"  [Chain] Bend[{first.Index}] Tag={first.Bend.Tag} isLow={isLowSide} flipped={flipped} useB={useB}" +
                 $"  primaryFarLine={( primaryFarLine >= 0 ? perimData[primaryFarLine].curve.Tag.ToString() : "-")}" +
                 $"  primaryFar={( primaryFar >= 0 ? perimData[primaryFar].curve.Tag.ToString() : "-")}" +
