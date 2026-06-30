@@ -821,6 +821,16 @@ namespace FlatPatternHighlight
                 if (key != null)
                     CreatedBoundaryKeys.Add(key);
             }
+
+            /// <summary>
+            /// Confirma o uso do nivel calculado, incrementando o contador correspondente.
+            /// Deve ser chamado somente apos criacao bem-sucedida da cota.
+            /// </summary>
+            public void ConfirmPlacementLevel(bool vDominant)
+            {
+                if (vDominant) VDominantLevel++;
+                else UDominantLevel++;
+            }
         }
 
         /// <summary>
@@ -1305,7 +1315,7 @@ namespace FlatPatternHighlight
                     }
                     else
                     {
-                        Point3d origin = CreateChainOrigin(
+                        var (origin, vDom) = CreateChainOrigin(
                             boundaryPoint,
                             first.MidPoint,
                             0,
@@ -1313,6 +1323,7 @@ namespace FlatPatternHighlight
                             normalAxis, placement);
                         if (CreatePmiRapidDimension(workPart, seg.curve, boundaryPoint, first.Bend, first.MidPoint, origin, normalAxis, lw))
                         {
+                            placement?.ConfirmPlacementLevel(vDom);
                             placement?.RegisterBoundaryKey(dedupKey);
                             count++;
                         }
@@ -1345,14 +1356,17 @@ namespace FlatPatternHighlight
                     continue;
                 }
 
-                Point3d origin = CreateChainOrigin(
+                var (origin, vDom) = CreateChainOrigin(
                     prev.MidPoint,
                     curr.MidPoint,
                     k,
                     bboxMinU, bboxMinV, bboxMaxU, bboxMaxV,
                     normalAxis, placement);
                 if (CreatePmiRapidDimension(workPart, prev.Bend, prev.MidPoint, curr.Bend, curr.MidPoint, origin, normalAxis, lw))
+                {
+                    placement?.ConfirmPlacementLevel(vDom);
                     count++;
+                }
             }
 
             return count;
@@ -1618,7 +1632,7 @@ namespace FlatPatternHighlight
         ///   normalAxis=1 (Y-normal) → (textU, normalVal, textV) — U=X, V=Z
         ///   normalAxis=2 (Z-normal) → (textU, textV, normalVal) — U=X, V=Y
         /// </summary>
-        private static Point3d CreateChainOrigin(
+        private static (Point3d origin, bool vDominant) CreateChainOrigin(
             Point3d pointA,
             Point3d pointB,
             int level,  // used only for same-chain level offset (k-index)
@@ -1649,19 +1663,24 @@ namespace FlatPatternHighlight
 
             // Determina orientação e nível: cada chain tem seu próprio nível
             // de posicionamento por lado, evitando sobreposição entre chains.
+            // O incremento do nivel e' feito via ConfirmPlacementLevel APOS
+            // criacao bem-sucedida da cota.
+            bool vDominant;
             double textU, textV;
             if (Math.Abs(vB - vA) >= Math.Abs(uB - uA))
             {
+                vDominant = true;
                 // V-dominante → texto fora da borda U-alta (lado direito)
-                int sideLevel = placement.VDominantLevel++;
+                int sideLevel = placement.VDominantLevel;
                 offset = margin + sideLevel * spacing;
                 textU = bboxMaxU + offset;
                 textV = midV;
             }
             else
             {
+                vDominant = false;
                 // U-dominante → texto fora da borda V-alta (lado superior)
-                int sideLevel = placement.UDominantLevel++;
+                int sideLevel = placement.UDominantLevel;
                 offset = margin + sideLevel * spacing;
                 textU = midU;
                 textV = bboxMaxV + offset;
@@ -1670,9 +1689,9 @@ namespace FlatPatternHighlight
             // Converte UV + valor normal de volta para XYZ
             switch (normalAxis)
             {
-                case 0:  return new Point3d(normalVal, textU, textV);   // U=Y, V=Z
-                case 1:  return new Point3d(textU, normalVal, textV);   // U=X, V=Z
-                default: return new Point3d(textU, textV, normalVal);   // U=X, V=Y
+                case 0:  return (new Point3d(normalVal, textU, textV), vDominant);
+                case 1:  return (new Point3d(textU, normalVal, textV), vDominant);
+                default: return (new Point3d(textU, textV, normalVal), vDominant);
             }
         }
 
