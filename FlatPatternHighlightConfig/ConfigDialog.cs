@@ -144,6 +144,9 @@ namespace FlatPatternHighlight
                    "Fator de proteção para substituição SmallEdge",
                    out nudSmallEdgeGuardFactor, 0.0m, 1.0m, 0.05m, 4);
 
+            // RowStyles devem ser adicionadas em ordem: linhas 0-5 auto-size, linha 6 (spacer) preenche o resto
+            for (int i = 0; i < 6; i++)
+                tbl.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             tbl.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             tbl.Controls.Add(new Label(), 0, 6);
             page.Controls.Add(tbl);
@@ -170,6 +173,9 @@ namespace FlatPatternHighlight
                    "Distância máxima (mm) para agrupar dobras de comprimentos diferentes",
                    out nudMaxChainGap, 0m, 500m, 5m, 1);
 
+            // RowStyles em ordem: linhas 0-1 auto-size, linha 2 (spacer) preenche
+            for (int i = 0; i < 2; i++)
+                tbl.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             tbl.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             tbl.Controls.Add(new Label(), 0, 2);
             page.Controls.Add(tbl);
@@ -193,6 +199,8 @@ namespace FlatPatternHighlight
                    "Casas decimais nas cotas PMI (0=inteiro, 1=1 casa, 2=2 casas...)",
                    out nudDimensionDecimalPlaces, 0m, 6m, 1m, 0);
 
+            // RowStyles em ordem: linha 0 auto-size, linha 1 (spacer) preenche
+            tbl.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             tbl.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             tbl.Controls.Add(new Label(), 0, 1);
             page.Controls.Add(tbl);
