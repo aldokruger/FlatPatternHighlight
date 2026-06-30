@@ -796,6 +796,52 @@ namespace FlatPatternHighlight
         // =====================================================================
 
         /// <summary>
+        /// Rastreador de nível de posicionamento de cotas PMI, usado para evitar
+        /// sobreposição. Duas direções de posicionamento:
+        ///   VDominant → texto colocado no lado direito (borda U máxima)
+        ///   UDominant → texto colocado no lado superior (borda V máxima)
+        /// Cada nova cota numa direção ganha um nível incremental (offset maior).
+        /// </summary>
+        private sealed class PlacementTracker
+        {
+            public int VDominantLevel;
+            public int UDominantLevel;
+        }
+
+        /// <summary>
+        /// Remove todas as cotas PMI criadas por execuções anteriores do
+        /// FlatPatternHighlight (identificadas pelo user attribute).
+        /// </summary>
+        private static void DeletePreviousPmiDimensions(Part workPart, LogFile lw)
+        {
+            int deleted = 0;
+            var toDelete = new List<NXOpen.NXObject>();
+            foreach (NXOpen.Annotations.Dimension dim in workPart.Dimensions)
+            {
+                try
+                {
+                    string val = dim.GetUserAttributeAsString(
+                        "FlatPatternHighlight",
+                        NXOpen.NXObject.AttributeType.String, 0);
+                    if (val == "true")
+                    {
+                        toDelete.Add(dim);
+                        deleted++;
+                    }
+                }
+                catch { }
+            }
+
+            if (toDelete.Count > 0)
+            {
+                var undoMark = theSession.SetUndoMark(Session.MarkVisibility.Invisible, "Delete old PMI dims");
+                theSession.UpdateManager.AddObjectsToDeleteList(toDelete.ToArray());
+                theSession.UpdateManager.DoUpdate(undoMark);
+                lw.WriteLine($"[PMI] Removed {deleted} existing dimension(s) from previous run");
+            }
+        }
+
+        /// <summary>
         /// Projeta um ponto sobre um segmento de reta (ponto mais próximo no segmento).
         /// Usado para posicionar pontos de origem de dimensão nas curvas de contorno.
         /// </summary>
@@ -830,6 +876,12 @@ namespace FlatPatternHighlight
             int uAxis, int vAxis, int normalAxis,
             LogFile lw)
         {
+            // Remove cotas de execuções anteriores para evitar duplicatas
+            DeletePreviousPmiDimensions(workPart, lw);
+
+            // Rastreador de posicionamento para evitar sobreposição entre chains
+            var placement = new PlacementTracker();
+
             int count = 0;
             var used = new bool[bendInfos.Count];
 
@@ -851,7 +903,7 @@ namespace FlatPatternHighlight
                 foreach (var lane in ClusterByRangeOverlap(bendInfos, group, uAxis, vAxis))
                 {
                     count += CreateChainForGroup(workPart, bendInfos, lane, perimData, outerPerim,
-                        bboxMinU, bboxMinV, bboxMaxU, bboxMaxV, uAxis, vAxis, normalAxis, lw);
+                        bboxMinU, bboxMinV, bboxMaxU, bboxMaxV, uAxis, vAxis, normalAxis, placement, lw);
                 }
             }
 
@@ -1017,6 +1069,7 @@ namespace FlatPatternHighlight
             List<Curve> outerPerim,
             double bboxMinU, double bboxMinV, double bboxMaxU, double bboxMaxV,
             int uAxis, int vAxis, int normalAxis,
+            PlacementTracker placement,
             LogFile lw)
         {
             var refInfo = bendInfos[groupIdx[0]];
@@ -1050,9 +1103,9 @@ namespace FlatPatternHighlight
 
             int count = 0;
             count += CreateChainSide(workPart, bendInfos, lowSide, perimData, outerPerim, isLowSide: true, normalAxis,
-                bboxMinU, bboxMinV, bboxMaxU, bboxMaxV, lw);
+                bboxMinU, bboxMinV, bboxMaxU, bboxMaxV, placement, lw);
             count += CreateChainSide(workPart, bendInfos, highSide, perimData, outerPerim, isLowSide: false, normalAxis,
-                bboxMinU, bboxMinV, bboxMaxU, bboxMaxV, lw);
+                bboxMinU, bboxMinV, bboxMaxU, bboxMaxV, placement, lw);
 
 
 
@@ -1086,6 +1139,7 @@ namespace FlatPatternHighlight
             List<Curve> outerPerim,
             bool isLowSide, int normalAxis,
             double bboxMinU, double bboxMinV, double bboxMaxU, double bboxMaxV,
+            PlacementTracker placement,
             LogFile lw)
         {
             if (side.Count == 0) return 0;
@@ -1229,7 +1283,7 @@ namespace FlatPatternHighlight
                         first.MidPoint,
                         0,
                         bboxMinU, bboxMinV, bboxMaxU, bboxMaxV,
-                        normalAxis);
+                        normalAxis, placement);
                     if (CreatePmiRapidDimension(workPart, seg.curve, boundaryPoint, first.Bend, first.MidPoint, origin, normalAxis, lw))
                         count++;
                 }
@@ -1265,7 +1319,7 @@ namespace FlatPatternHighlight
                     curr.MidPoint,
                     k,
                     bboxMinU, bboxMinV, bboxMaxU, bboxMaxV,
-                    normalAxis);
+                    normalAxis, placement);
                 if (CreatePmiRapidDimension(workPart, prev.Bend, prev.MidPoint, curr.Bend, curr.MidPoint, origin, normalAxis, lw))
                     count++;
             }
@@ -1536,12 +1590,13 @@ namespace FlatPatternHighlight
         private static Point3d CreateChainOrigin(
             Point3d pointA,
             Point3d pointB,
-            int level,
+            int level,  // used only for same-chain level offset (k-index)
             double bboxMinU,
             double bboxMinV,
             double bboxMaxU,
             double bboxMaxV,
-            int normalAxis)
+            int normalAxis,
+            PlacementTracker placement)
         {
             double bboxExtent = Math.Max(bboxMaxU - bboxMinU, bboxMaxV - bboxMinV);
             double margin = Math.Max(25.0, bboxExtent * 0.03);
@@ -1561,16 +1616,22 @@ namespace FlatPatternHighlight
             double midU = (uA + uB) / 2.0;
             double midV = (vA + vB) / 2.0;
 
-            // Medição V-dominante -> texto fora da borda U-alta (lado direito).
-            // Medição U-dominante -> texto fora da borda V-alta (lado superior).
+            // Determina orientação e nível: cada chain tem seu próprio nível
+            // de posicionamento por lado, evitando sobreposição entre chains.
             double textU, textV;
             if (Math.Abs(vB - vA) >= Math.Abs(uB - uA))
             {
+                // V-dominante → texto fora da borda U-alta (lado direito)
+                int sideLevel = placement.VDominantLevel++;
+                offset = margin + sideLevel * spacing;
                 textU = bboxMaxU + offset;
                 textV = midV;
             }
             else
             {
+                // U-dominante → texto fora da borda V-alta (lado superior)
+                int sideLevel = placement.UDominantLevel++;
+                offset = margin + sideLevel * spacing;
                 textU = midU;
                 textV = bboxMaxV + offset;
             }
