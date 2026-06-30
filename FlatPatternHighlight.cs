@@ -130,10 +130,31 @@ namespace FlatPatternHighlight
             List<Curve> outerPerim = null;
             List<Curve> bendLines = null;
 
+            // Se o primeiro argumento for "settings" ou "/S", abre direto as configs
+            // (útil para atalhos ou chamada externa com argumentos).
+            bool settingsOnly = args.Length > 0 &&
+                (args[0].Equals("settings", StringComparison.OrdinalIgnoreCase) || args[0] == "/S");
+
             try
             {
                 theSession = Session.GetSession();
                 theUI = UI.GetUI();
+
+                // Janela de escolha: dimensionar ou configurar?
+                if (!settingsOnly)
+                {
+                    var choice = LauncherDialog.Show();
+                    if (choice == LauncherDialog.LauncherChoice.Settings)
+                        settingsOnly = true;
+                    else if (choice == LauncherDialog.LauncherChoice.Cancel)
+                        return 0;
+                }
+
+                if (settingsOnly)
+                {
+                    ShowSettings();
+                    return 0;
+                }
 
                 // Exige um work part ativo (não apenas um displayed part).
                 Part workPart = theSession.Parts.Work;
