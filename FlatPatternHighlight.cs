@@ -151,6 +151,14 @@ namespace FlatPatternHighlight
             /// </summary>
             public double MaxChainGap = 50.0;
 
+            /// <summary>
+            /// Número de casas decimais para as cotas PMI.
+            /// 0 = inteiro, 1 = 1 casa decimal, 2 = 2 casas decimais, etc.
+            /// O usuário pode alterar este valor a qualquer momento editando o
+            /// settings.json, sem precisar recompilar a DLL.
+            /// </summary>
+            public int DimensionDecimalPlaces = 1;
+
             // =====================================================================
             // Carga / salvamento
             // =====================================================================
@@ -232,6 +240,7 @@ namespace FlatPatternHighlight
                 TrySet(ref s.SmallEdgeGuardFactor, map, nameof(SmallEdgeGuardFactor));
                 TrySet(ref s.LaneLengthRatioThreshold, map, nameof(LaneLengthRatioThreshold));
                 TrySet(ref s.MaxChainGap, map, nameof(MaxChainGap));
+                TrySet(ref s.DimensionDecimalPlaces, map, nameof(DimensionDecimalPlaces));
 
                 return s;
             }
@@ -240,6 +249,17 @@ namespace FlatPatternHighlight
             {
                 if (map.TryGetValue(key, out var val) && val is double d)
                     field = d;
+            }
+
+            private static void TrySet(ref int field, Dictionary<string, object> map, string key)
+            {
+                if (map.TryGetValue(key, out var val))
+                {
+                    if (val is double d)
+                        field = (int)Math.Round(d);
+                    else if (val is long l)
+                        field = (int)l;
+                }
             }
 
             /// <summary>
@@ -314,7 +334,8 @@ namespace FlatPatternHighlight
                        $"  \"{nameof(s.SmallEdgeRatio)}\": {s.SmallEdgeRatio.ToString(ci)},\n" +
                        $"  \"{nameof(s.SmallEdgeGuardFactor)}\": {s.SmallEdgeGuardFactor.ToString(ci)},\n" +
                        $"  \"{nameof(s.LaneLengthRatioThreshold)}\": {s.LaneLengthRatioThreshold.ToString(ci)},\n" +
-                       $"  \"{nameof(s.MaxChainGap)}\": {s.MaxChainGap.ToString(ci)}\n" +
+                       $"  \"{nameof(s.MaxChainGap)}\": {s.MaxChainGap.ToString(ci)},\n" +
+                       $"  \"{nameof(s.DimensionDecimalPlaces)}\": {s.DimensionDecimalPlaces}\n" +
                        "}";
             }
         }
@@ -333,6 +354,7 @@ namespace FlatPatternHighlight
         private static double SmallEdgeGuardFactor => Config.SmallEdgeGuardFactor;
         private static double LaneLengthRatioThreshold => Config.LaneLengthRatioThreshold;
         private static double MaxChainGap => Config.MaxChainGap;
+        private static int DimensionDecimalPlaces => Config.DimensionDecimalPlaces;
 
         // Guardas numéricas — não expostas ao usuário (risco de instabilidade)
         private const double MinSegmentLength = 1e-6;
@@ -383,6 +405,7 @@ namespace FlatPatternHighlight
                 lw.WriteLine($"[config] SmallEdgeGuardFactor     = {SmallEdgeGuardFactor:F3}");
                 lw.WriteLine($"[config] LaneLengthRatioThreshold = {LaneLengthRatioThreshold:F3}");
                 lw.WriteLine($"[config] MaxChainGap               = {MaxChainGap:F1}  (offset gap for lane merge)");
+                lw.WriteLine($"[config] DimensionDecimalPlaces    = {DimensionDecimalPlaces}  (PMI dimension precision)");
                 lw.WriteLine("");
 
                 // Localiza a feature FlatPattern — sem ela não há o que analisar.
@@ -1551,6 +1574,10 @@ namespace FlatPatternHighlight
                     NXOpen.Annotations.PlaneBuilder.PlaneMethodType.ModelView;
                 builder.Origin.Anchor =
                     NXOpen.Annotations.OriginBuilder.AlignmentPosition.MidCenter;
+
+                // Aplica precisão (casas decimais) configurada pelo usuário.
+                // DimensionValuePrecision: 0=inteiro, 1=1 decimal, 2=2 decimais, etc.
+                builder.Style.DimensionStyle.DimensionValuePrecision = DimensionDecimalPlaces;
 
                 builder.FirstAssociativity.SetValue(curveA, flatView, pickA);
                 builder.SecondAssociativity.SetValue(
