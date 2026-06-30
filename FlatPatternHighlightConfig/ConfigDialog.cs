@@ -68,8 +68,8 @@ namespace FlatPatternHighlight
         private void InitializeComponent()
         {
             Text = "FlatPatternHighlight — Configurações";
-            Size = new Size(520, 560);
-            MinimumSize = new Size(480, 500);
+            Size = new Size(520, 600);
+            MinimumSize = new Size(480, 540);
             StartPosition = FormStartPosition.CenterScreen;
             Font = new Font("Segoe UI", 9F);
             FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -78,21 +78,17 @@ namespace FlatPatternHighlight
             ShowIcon = false;
             ShowInTaskbar = false;
 
-            // Logo header
+            // Logo header — PictureBox flutuante no topo; form Padding empurra
+            // os controles com Dock para baixo, deixando espaco para o logo.
+            Padding = new Padding(0, 50, 0, 0);
+            var logoImg = LoadLogoImage();
             pbLogo = new PictureBox
             {
-                Image = LoadLogoImage(),
-                SizeMode = PictureBoxSizeMode.AutoSize,
-                Location = new Point(12, 8),
-                BackColor = Color.Transparent
+                Image = logoImg,
+                SizeMode = PictureBoxSizeMode.CenterImage,
+                Size = new Size(184, 38),
+                Location = new Point(12, 8)
             };
-            var headerPanel = new Panel
-            {
-                Height = pbLogo.Height + 16,
-                Dock = DockStyle.Top,
-                Padding = new Padding(0)
-            };
-            headerPanel.Controls.Add(pbLogo);
 
             var tabControl = new TabControl
             {
@@ -141,9 +137,9 @@ namespace FlatPatternHighlight
             AcceptButton = btnOk;
 
             panelBottom.Controls.AddRange(new Control[] { btnReset, btnCancel, btnOk });
-            Controls.Add(headerPanel);
             Controls.Add(tabControl);
             Controls.Add(panelBottom);
+            Controls.Add(pbLogo);  // sobre o tabControl, mas na area do Padding (y=8)
         }
 
         private TabPage CreateBoundaryTab()
