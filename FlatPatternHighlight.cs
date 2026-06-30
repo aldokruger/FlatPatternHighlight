@@ -141,6 +141,16 @@ namespace FlatPatternHighlight
             /// </summary>
             public double LaneLengthRatioThreshold = 0.7;
 
+            /// <summary>
+            /// Distância máxima (mm) ao longo da normal para permitir que duas dobras
+            /// de comprimentos diferentes sejam agrupadas na mesma lane.
+            /// Quando similarLength falha mas as dobras estão dentro deste gap de offset,
+            /// elas são consideradas parte da mesma região (ex.: aba superior recortada
+            /// + aba continua abaixo dela) e unidas na mesma cadeia de cotas.
+            /// Default: 50 mm (cobre a maioria dos casos de flanges consecutivas).
+            /// </summary>
+            public double MaxChainGap = 50.0;
+
             // =====================================================================
             // Carga / salvamento
             // =====================================================================
@@ -221,6 +231,7 @@ namespace FlatPatternHighlight
                 TrySet(ref s.SmallEdgeRatio, map, nameof(SmallEdgeRatio));
                 TrySet(ref s.SmallEdgeGuardFactor, map, nameof(SmallEdgeGuardFactor));
                 TrySet(ref s.LaneLengthRatioThreshold, map, nameof(LaneLengthRatioThreshold));
+                TrySet(ref s.MaxChainGap, map, nameof(MaxChainGap));
 
                 return s;
             }
@@ -302,7 +313,8 @@ namespace FlatPatternHighlight
                        $"  \"{nameof(s.CutoutSkipRatio)}\": {s.CutoutSkipRatio.ToString(ci)},\n" +
                        $"  \"{nameof(s.SmallEdgeRatio)}\": {s.SmallEdgeRatio.ToString(ci)},\n" +
                        $"  \"{nameof(s.SmallEdgeGuardFactor)}\": {s.SmallEdgeGuardFactor.ToString(ci)},\n" +
-                       $"  \"{nameof(s.LaneLengthRatioThreshold)}\": {s.LaneLengthRatioThreshold.ToString(ci)}\n" +
+                       $"  \"{nameof(s.LaneLengthRatioThreshold)}\": {s.LaneLengthRatioThreshold.ToString(ci)},\n" +
+                       $"  \"{nameof(s.MaxChainGap)}\": {s.MaxChainGap.ToString(ci)}\n" +
                        "}";
             }
         }
@@ -320,6 +332,7 @@ namespace FlatPatternHighlight
         private static double SmallEdgeRatio => Config.SmallEdgeRatio;
         private static double SmallEdgeGuardFactor => Config.SmallEdgeGuardFactor;
         private static double LaneLengthRatioThreshold => Config.LaneLengthRatioThreshold;
+        private static double MaxChainGap => Config.MaxChainGap;
 
         // Guardas numéricas — não expostas ao usuário (risco de instabilidade)
         private const double MinSegmentLength = 1e-6;
@@ -369,6 +382,7 @@ namespace FlatPatternHighlight
                 lw.WriteLine($"[config] SmallEdgeRatio           = {SmallEdgeRatio:F3}");
                 lw.WriteLine($"[config] SmallEdgeGuardFactor     = {SmallEdgeGuardFactor:F3}");
                 lw.WriteLine($"[config] LaneLengthRatioThreshold = {LaneLengthRatioThreshold:F3}");
+                lw.WriteLine($"[config] MaxChainGap               = {MaxChainGap:F1}  (offset gap for lane merge)");
                 lw.WriteLine("");
 
                 // Localiza a feature FlatPattern — sem ela não há o que analisar.
@@ -1083,14 +1097,40 @@ namespace FlatPatternHighlight
         /// recortada menor (ex.: 271 mm) que, mesmo paralela, pertence a uma cadeia
         /// de cotas separada (flange diferente na dobra em U).
         /// </summary>
+        /// <summary>
+        /// Divide um grupo de dobras paralelas em lanes (abas/flanges independentes).
+        ///
+        /// Algoritmo (dois passos):
+        ///   1. Atribuição greedy: para cada dobra, projeta seus endpoints na direção
+        ///      de referência do grupo (refDir) para obter [lo, hi]. Coloca a dobra na
+        ///      primeira lane existente que:
+        ///        (a) tenha sobreposição de range com [lo, hi], E
+        ///        (b) tenha comprimento similar (ratio >= LaneLengthRatioThreshold)
+        ///            OU offset próximo ao range da lane (|offset - laneOffset| <= MaxChainGap).
+        ///      A condição (b) com MaxChainGap permite que flanges de comprimentos
+        ///      diferentes no mesmo nível Y (ex.: recorte parcial da aba superior)
+        ///      sejam agrupadas com a aba contínua abaixo dela.
+        ///      Se nenhuma lane combinar, cria uma nova lane.
+        ///   2. Consolidação: repete até convergência, fundindo pares de lanes que se
+        ///      tornaram sobrepostas e têm comprimentos similares OU offsets próximos.
+        ///
+        /// Propósito: manter a separação entre lados opostos de U-bends (comprimentos
+        /// similares mas offsets distantes) enquanto permite que flanges recortadas
+        /// parciais se juntem à cadeia principal.
+        /// </summary>
         private static List<List<int>> ClusterByRangeOverlap(
             List<BendAnalysisInfo> bendInfos,
             List<int> groupIdx, int uAxis, int vAxis)
         {
             Vector3d refDir = bendInfos[groupIdx[0]].Direction;
+            // Normal perpendicular à direção: rotação 90° anti-horária (-dy, dx)
+            Vector3d refNml = new Vector3d(-refDir.Y, refDir.X, 0);
+
             var lanes = new List<List<int>>();
             var laneRanges = new List<(double lo, double hi)>();
             var laneLens = new List<double>();
+            var laneOffsetLo = new List<double>();
+            var laneOffsetHi = new List<double>();
 
             foreach (int gi in groupIdx)
             {
@@ -1102,16 +1142,26 @@ namespace FlatPatternHighlight
                 double lo = Math.Min(s, e), hi = Math.Max(s, e);
                 double len = Math.Sqrt(Math.Pow(beU - bsU, 2) + Math.Pow(beV - bsV, 2));
 
+                // Offset do ponto médio ao longo da normal (distância perpendicular à dobra)
+                double mu = (bsU + beU) / 2, mv = (bsV + beV) / 2;
+                double offset = mu * refNml.X + mv * refNml.Y;
+
                 bool placed = false;
                 for (int k = 0; k < lanes.Count; k++)
                 {
                     bool overlaps = lo <= laneRanges[k].hi && hi >= laneRanges[k].lo;
                     bool similarLength = Math.Min(len, laneLens[k]) / Math.Max(len, laneLens[k]) >= LaneLengthRatioThreshold;
-                    if (overlaps && similarLength)
+                    bool withinOffsetGap = !similarLength &&
+                        offset >= laneOffsetLo[k] - MaxChainGap &&
+                        offset <= laneOffsetHi[k] + MaxChainGap;
+
+                    if (overlaps && (similarLength || withinOffsetGap))
                     {
                         lanes[k].Add(gi);
                         laneRanges[k] = (Math.Min(laneRanges[k].lo, lo), Math.Max(laneRanges[k].hi, hi));
                         laneLens[k] = Math.Max(laneLens[k], len);
+                        laneOffsetLo[k] = Math.Min(laneOffsetLo[k], offset);
+                        laneOffsetHi[k] = Math.Max(laneOffsetHi[k], offset);
                         placed = true;
                         break;
                     }
@@ -1121,6 +1171,8 @@ namespace FlatPatternHighlight
                     lanes.Add(new List<int> { gi });
                     laneRanges.Add((lo, hi));
                     laneLens.Add(len);
+                    laneOffsetLo.Add(offset);
+                    laneOffsetHi.Add(offset);
                 }
             }
 
@@ -1135,14 +1187,22 @@ namespace FlatPatternHighlight
                     {
                         bool overlaps = laneRanges[a].lo <= laneRanges[b].hi && laneRanges[a].hi >= laneRanges[b].lo;
                         bool similarLength = Math.Min(laneLens[a], laneLens[b]) / Math.Max(laneLens[a], laneLens[b]) >= LaneLengthRatioThreshold;
-                        if (overlaps && similarLength)
+                        bool offsetClose = !similarLength &&
+                            laneOffsetLo[a] <= laneOffsetHi[b] + MaxChainGap &&
+                            laneOffsetLo[b] <= laneOffsetHi[a] + MaxChainGap;
+
+                        if (overlaps && (similarLength || offsetClose))
                         {
                             lanes[a].AddRange(lanes[b]);
                             laneRanges[a] = (Math.Min(laneRanges[a].lo, laneRanges[b].lo), Math.Max(laneRanges[a].hi, laneRanges[b].hi));
                             laneLens[a] = Math.Max(laneLens[a], laneLens[b]);
+                            laneOffsetLo[a] = Math.Min(laneOffsetLo[a], laneOffsetLo[b]);
+                            laneOffsetHi[a] = Math.Max(laneOffsetHi[a], laneOffsetHi[b]);
                             lanes.RemoveAt(b);
                             laneRanges.RemoveAt(b);
                             laneLens.RemoveAt(b);
+                            laneOffsetLo.RemoveAt(b);
+                            laneOffsetHi.RemoveAt(b);
                             mergedAny = true;
                             break;
                         }
@@ -1341,10 +1401,29 @@ namespace FlatPatternHighlight
 
             // --- Cotas entre dobras consecutivas da cadeia ---
             // (sem boundary: midpoint→midpoint das dobras vizinhas)
+            //
+            // Pula dobras no mesmo offset (mesmo nível Y / mesmo lado da flange) —
+            // são flanges paralelas diferentes na mesma borda (ex.: recorte central
+            // + flanges laterais à mesma altura). A distância perpendicular entre
+            // elas é ~0 e não deve gerar cota. O chain conecta corretamente a
+            // primeira dobra de cada nível consecutivo.
             for (int k = 1; k < side.Count; k++)
             {
                 var prev = bendInfos[side[k - 1].idx];
                 var curr = bendInfos[side[k].idx];
+
+                // Calcula a distância perpendicular entre as duas dobras paralelas.
+                double du = curr.MidPoint.X - prev.MidPoint.X;
+                double dv = curr.MidPoint.Y - prev.MidPoint.Y;
+                double dw = curr.MidPoint.Z - prev.MidPoint.Z;
+                double perpDist = Math.Abs(du * prev.Normal.X + dv * prev.Normal.Y + dw * prev.Normal.Z);
+                const double sameLevelThreshold = 0.5;
+                if (perpDist < sameLevelThreshold)
+                {
+                    lw.WriteLine($"  [Chain] Skipping dim between Bend[{prev.Index}] and Bend[{curr.Index}] — same level (dist={perpDist:F3})");
+                    continue;
+                }
+
                 Point3d origin = CreateChainOrigin(
                     prev.MidPoint,
                     curr.MidPoint,
