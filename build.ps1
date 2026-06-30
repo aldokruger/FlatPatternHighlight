@@ -6,13 +6,21 @@ param(
 )
 
 $ProjectDir = $PSScriptRoot
-$OutputDir = "$ProjectDir\bin\$Configuration"
-$DllName = "FlatPatternHighlight.dll"
-$CsprojPath = "$ProjectDir\FlatPatternHighlight.csproj"
+$ConfigDir  = "$ProjectDir\FlatPatternHighlightConfig"
+$OutputDir  = "$ProjectDir\bin\$Configuration"
+$ConfigOut  = "$ConfigDir\bin\$Configuration"
 
-Write-Host "=== FlatPatternHighlight Build ===" -ForegroundColor Cyan
+$Dlls = @(
+    @{ Name = "FlatPatternHighlight.dll"; Proj = "FlatPatternHighlight.csproj" },
+    @{ Name = "FlatPatternHighlightConfig.dll"; Proj = "FlatPatternHighlightConfig/FlatPatternHighlightConfig.csproj" }
+)
+
+Write-Host "=== FlatPatternHighlight Build (Main + Config) ===" -ForegroundColor Cyan
 Write-Host ""
 
+# ─────────────────────────────────────────────────────
+# 1. Localizar NX
+# ─────────────────────────────────────────────────────
 if ([string]::IsNullOrEmpty($NxDir))
 {
     $candidates = @(
@@ -37,7 +45,10 @@ $signTool     = "$NxDir\NXBIN\SignDotNet.exe"
 
 Write-Host "NX install: $NxDir" -ForegroundColor DarkGray
 
-Write-Host "[1/4] Checking prerequisites..." -ForegroundColor Yellow
+# ─────────────────────────────────────────────────────
+# 2. Pré-requisitos
+# ─────────────────────────────────────────────────────
+Write-Host "[1/5] Checking prerequisites..." -ForegroundColor Yellow
 
 $dotnet = Get-Command dotnet -ErrorAction SilentlyContinue
 if (-not $dotnet)
@@ -61,64 +72,130 @@ if ($missing)
 }
 Write-Host "  All prerequisites OK" -ForegroundColor Green
 
-Write-Host "[2/4] Copying NXSigningResource.res..." -ForegroundColor Yellow
+# ─────────────────────────────────────────────────────
+# 3. Copiar NXSigningResource.res
+# ─────────────────────────────────────────────────────
+Write-Host "[2/5] Copying NXSigningResource.res..." -ForegroundColor Yellow
 Copy-Item "$nxUfOpenDir\NXSigningResource.res" "$ProjectDir\" -Force
 Write-Host "  Done" -ForegroundColor Green
 
-Write-Host "[3/4] Patching .csproj with NX path..." -ForegroundColor Yellow
-$csprojContent = Get-Content $CsprojPath -Raw
-$csprojContent = $csprojContent -replace 'C:\\Program Files\\Siemens\\NX2512', $NxDir.Replace('\', '\\')
-Set-Content $CsprojPath $csprojContent -Encoding UTF8
-Write-Host "  HintPath updated to $NxDir" -ForegroundColor Green
+# ─────────────────────────────────────────────────────
+# 4. Patching .csproj HintPaths
+# ─────────────────────────────────────────────────────
+Write-Host "[3/5] Patching .csproj HintPaths to $NxDir..." -ForegroundColor Yellow
+$nxEscaped = $NxDir.Replace('\', '\\')
+foreach ($entry in $Dlls)
+{
+    $projPath = "$ProjectDir\$($entry.Proj)"
+    if (Test-Path $projPath)
+    {
+        $content = Get-Content $projPath -Raw
+        # Substitui qualquer caminho NX existente pelo atual
+        $content = $content -replace 'D:\\\\NX2512', $nxEscaped
+        $content = $content -replace 'C:\\\\Program Files\\\\Siemens\\\\NX2512', $nxEscaped
+        Set-Content $projPath $content -Encoding UTF8
+    }
+}
+Write-Host "  Done" -ForegroundColor Green
 
-Write-Host "[3/4] Building plugin ($Configuration)..." -ForegroundColor Yellow
+# ─────────────────────────────────────────────────────
+# 5. Build
+# ─────────────────────────────────────────────────────
+Write-Host "[4/5] Building plugins ($Configuration)..." -ForegroundColor Yellow
 Set-Location $ProjectDir
 
-$buildResult = dotnet build -c $Configuration --nologo -v q 2>&1
-if ($LASTEXITCODE -ne 0)
+foreach ($entry in $Dlls)
 {
-    Write-Error "Build failed:"
-    Write-Host $buildResult -ForegroundColor Red
-    exit 1
-}
-Write-Host "  Build OK" -ForegroundColor Green
+    $projPath = "$ProjectDir\$($entry.Proj)"
+    $dllName  = $entry.Name
+    $label = $dllName -replace '\.dll$', ''
 
-$dllPath = "$OutputDir\$DllName"
-if (-not (Test-Path $dllPath))
-{
-    Write-Error "Expected DLL not found at: $dllPath"
-    exit 1
-}
+    Write-Host "  -> $dllName ..." -NoNewline -ForegroundColor DarkGray
 
-$menFile = "$ProjectDir\FlatPatternHighlight.men"
-$rtbFile = "$ProjectDir\FlatPatternHighlight.rtb"
+    $buildResult = dotnet build "$projPath" -c $Configuration --nologo -v q 2>&1
+    if ($LASTEXITCODE -ne 0)
+    {
+        Write-Host " FAILED" -ForegroundColor Red
+        Write-Host $buildResult -ForegroundColor Red
+        exit 1
+    }
 
-Write-Host "  Signing DLL..." -ForegroundColor Yellow
-& $signTool $dllPath 2>&1 | Out-Null
-if ($LASTEXITCODE -eq 0)
-{
-    Write-Host "  Signed OK" -ForegroundColor Green
-}
-else
-{
-    Write-Warning "Signing failed (no DotNet Author License?). DLL will work via Ctrl+U."
+    # Localizar o DLL output (cada projeto tem seu próprio bin/)
+    $projDir = Split-Path $projPath -Parent
+    $dllOut = "$projDir\bin\$Configuration\$dllName"
+
+    Write-Host " OK" -ForegroundColor Green
 }
 
-$signedNote = ""
-if ($LASTEXITCODE -ne 0) { $signedNote = " (assinatura indisponível)" }
+Write-Host "  All builds successful" -ForegroundColor Green
 
+# ─────────────────────────────────────────────────────
+# 6. Assinar DLLs
+# ─────────────────────────────────────────────────────
+Write-Host "[5/5] Signing DLLs..." -ForegroundColor Yellow
+$anyFail = $false
+foreach ($entry in $Dlls)
+{
+    $projDir = Split-Path "$ProjectDir\$($entry.Proj)" -Parent
+    $dllPath = "$projDir\bin\$Configuration\$($entry.Name)"
+
+    if (-not (Test-Path $dllPath))
+    {
+        Write-Warning "  $($entry.Name) not found at $dllPath"
+        $anyFail = $true
+        continue
+    }
+
+    & $signTool $dllPath 2>&1 | Out-Null
+    if ($LASTEXITCODE -eq 0)
+    {
+        Write-Host "  $($entry.Name) signed OK" -ForegroundColor Green
+    }
+    else
+    {
+        Write-Warning "  $($entry.Name) signing failed (no DotNet Author License?)"
+        $anyFail = $true
+    }
+}
+
+# ─────────────────────────────────────────────────────
+# Resumo
+# ─────────────────────────────────────────────────────
 Write-Host ""
-Write-Host "=== Build Successful ===" -ForegroundColor Green
-Write-Host "  DLL:      $dllPath$signedNote"
-Write-Host "  Size:     $((Get-Item $dllPath).Length / 1KB -as [int]) KB"
+Write-Host "=== Build Summary ===" -ForegroundColor Green
+
+foreach ($entry in $Dlls)
+{
+    $projDir = Split-Path "$ProjectDir\$($entry.Proj)" -Parent
+    $dllPath = "$projDir\bin\$Configuration\$($entry.Name)"
+    $sizeStr = "?"
+    if (Test-Path $dllPath) { $sizeStr = "$((Get-Item $dllPath).Length / 1KB -as [int]) KB" }
+    Write-Host "  $($entry.Name)`t$sizeStr" -ForegroundColor $(
+        if (Test-Path $dllPath) { 'Green' } else { 'Red' }
+    )
+}
+
+if ($anyFail)
+{
+    Write-Host ""
+    Write-Warning "Some DLLs could not be signed. Ctrl+U will still work."
+}
+
 Write-Host ""
 Write-Host "Install options:" -ForegroundColor Cyan
 Write-Host "  1. Ctrl+U: File > Execute > NX Open > select the DLL directly"
-Write-Host "  2. Install: Copy to startup\ for ribbon + menu auto-load"
-Write-Host "     Copy all three files to a startup folder:"
-Write-Host "     Copy-Item '$dllPath' 'C:\startup\'" -ForegroundColor DarkGray
-Write-Host "     Copy-Item '$menFile' 'C:\startup\'" -ForegroundColor DarkGray
-Write-Host "     Copy-Item '$rtbFile' 'C:\startup\'" -ForegroundColor DarkGray
+Write-Host "  2. Install: Copy all files below to a startup folder:"
 Write-Host ""
-Write-Host "Note: The .men file uses NXOpen:: syntax - no signing required for" -ForegroundColor Yellow
-Write-Host "ribbon/menu auto-load. Ctrl+U works regardless of signing." -ForegroundColor Yellow
+
+foreach ($entry in $Dlls)
+{
+    $projDir = Split-Path "$ProjectDir\$($entry.Proj)" -Parent
+    $dllPath = "$projDir\bin\$Configuration\$($entry.Name)"
+    Write-Host "     Copy-Item '$dllPath' '$DeployDir'" -ForegroundColor DarkGray
+}
+Write-Host "     Copy-Item '$ProjectDir\FlatPatternHighlight.men' '$DeployDir'" -ForegroundColor DarkGray
+Write-Host "     Copy-Item '$ProjectDir\FlatPatternHighlight.rtb' '$DeployDir'" -ForegroundColor DarkGray
+
+Write-Host ""
+Write-Host "  For the Config button, use action:" -ForegroundColor Yellow
+Write-Host "    FlatPatternHighlightConfig.dll@FlatPatternHighlightConfig.ConfigMain.Main" -ForegroundColor White
