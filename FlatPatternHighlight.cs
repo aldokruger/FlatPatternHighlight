@@ -946,23 +946,6 @@ namespace FlatPatternHighlight
         ///      de referência do grupo (refDir) para obter [lo, hi]. Coloca a dobra na
         ///      primeira lane existente que:
         ///        (a) tenha sobreposição de range com [lo, hi], E
-        ///        (b) tenha comprimento similar (ratio >= LaneLengthRatioThreshold = 0.7).
-        ///      Se nenhuma lane combinar, cria uma nova lane.
-        ///   2. Consolidação: repete até convergência, fundindo pares de lanes que se
-        ///      tornaram sobrepostas após extensões de range causadas pelas atribuições.
-        ///
-        /// Propósito: distinguir a aba horizontal inteira (ex.: 337 mm) de uma aba
-        /// recortada menor (ex.: 271 mm) que, mesmo paralela, pertence a uma cadeia
-        /// de cotas separada (flange diferente na dobra em U).
-        /// </summary>
-        /// <summary>
-        /// Divide um grupo de dobras paralelas em lanes (abas/flanges independentes).
-        ///
-        /// Algoritmo (dois passos):
-        ///   1. Atribuição greedy: para cada dobra, projeta seus endpoints na direção
-        ///      de referência do grupo (refDir) para obter [lo, hi]. Coloca a dobra na
-        ///      primeira lane existente que:
-        ///        (a) tenha sobreposição de range com [lo, hi], E
         ///        (b) tenha comprimento similar (ratio >= LaneLengthRatioThreshold)
         ///            OU offset próximo ao range da lane (|offset - laneOffset| <= MaxChainGap).
         ///      A condição (b) com MaxChainGap permite que flanges de comprimentos
