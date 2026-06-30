@@ -1311,11 +1311,21 @@ namespace FlatPatternHighlight
                         (boundaryPoint.X - first.MidPoint.X) * (boundaryPoint.X - first.MidPoint.X) +
                         (boundaryPoint.Y - first.MidPoint.Y) * (boundaryPoint.Y - first.MidPoint.Y) +
                         (boundaryPoint.Z - first.MidPoint.Z) * (boundaryPoint.Z - first.MidPoint.Z));
-                    // --- Chave de deduplicacao: valor + curva de perimetro ---
-                    // A curva de perimetro identifica UNICAMENTE qual segmento de borda
-                    // esta sendo cotado. Duas lanes na MESMA borda com o mesmo valor
-                    // sao redundantes. Duas lanes em bordas OPOSTAS sao independentes.
-                    string dedupKey = $"{boundaryDist.ToString("F" + DimensionDecimalPlaces, System.Globalization.CultureInfo.InvariantCulture)}|Tag{seg.curve.Tag}";
+                    // --- Chave de deduplicacao: valor + direcao UV ---
+                    // A direcao no plano da chapa determina de qual LADO a cota sai
+                    // (U+ = direita, U- = esquerda, V+ = cima, V- = baixo). Varias
+                    // lanes na mesma borda com o mesmo valor sao redundantes; lanes
+                    // em bordas opostas sao independentes.
+                    int uIdx = normalAxis == 0 ? 1 : 0;
+                    int vIdx = normalAxis <= 1 ? 2 : 1;
+                    double bdU = AxisCoord(boundaryPoint, uIdx) - AxisCoord(first.MidPoint, uIdx);
+                    double bdV = AxisCoord(boundaryPoint, vIdx) - AxisCoord(first.MidPoint, vIdx);
+                    string dirTag;
+                    if (Math.Abs(bdU) >= Math.Abs(bdV))
+                        dirTag = bdU >= 0 ? "U+" : "U-";
+                    else
+                        dirTag = bdV >= 0 ? "V+" : "V-";
+                    string dedupKey = $"{boundaryDist.ToString("F" + DimensionDecimalPlaces, System.Globalization.CultureInfo.InvariantCulture)}|{dirTag}";
                     if (placement != null && placement.IsKeyDuplicate(dedupKey))
                     {
                         lw.WriteLine($"  [Chain] Skipping boundary dim for Bend Tag={first.Bend.Tag} -" +
