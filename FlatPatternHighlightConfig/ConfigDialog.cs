@@ -7,28 +7,20 @@ namespace FlatPatternHighlight
     /// <summary>
     /// Janela Windows Forms para editar as configurações do FlatPatternHighlight
     /// sem precisar editar o settings.json manualmente.
-    /// 
-    /// Para abrir: Ctrl+U → selecionar FlatPatternHighlight.ShowSettings
     /// </summary>
     internal sealed class ConfigDialog : Form
     {
-        private readonly Settings _original;
         private readonly Settings _edit;
 
         // Controles
-        // Grupo: Boundary Detection
         private NumericUpDown nudParallelismThreshold;
         private NumericUpDown nudDiagonalBendThreshold;
         private NumericUpDown nudArtefactSkipDistanceSq;
         private NumericUpDown nudCutoutSkipRatio;
         private NumericUpDown nudSmallEdgeRatio;
         private NumericUpDown nudSmallEdgeGuardFactor;
-
-        // Grupo: Lanes & Chains
         private NumericUpDown nudLaneLengthRatioThreshold;
         private NumericUpDown nudMaxChainGap;
-
-        // Grupo: PMI Dimensions
         private NumericUpDown nudDimensionDecimalPlaces;
 
         private Button btnOk;
@@ -37,9 +29,7 @@ namespace FlatPatternHighlight
 
         private ConfigDialog(Settings settings)
         {
-            _original = settings;
             _edit = CloneSettings(settings);
-
             InitializeComponent();
             LoadSettings();
         }
@@ -51,7 +41,6 @@ namespace FlatPatternHighlight
             {
                 if (dlg.ShowDialog() == DialogResult.OK)
                 {
-                    // Copia valores editados de volta
                     CopySettings(dlg._edit, settings);
                     return true;
                 }
@@ -59,9 +48,6 @@ namespace FlatPatternHighlight
             }
         }
 
-        // =====================================================================
-        // Constrói o formulário manualmente (sem designer)
-        // =====================================================================
         private void InitializeComponent()
         {
             Text = "FlatPatternHighlight — Configurações";
@@ -81,16 +67,11 @@ namespace FlatPatternHighlight
                 Padding = new Point(12, 8)
             };
 
-            // ---- Tab 1: Detectação de Boundary ----
             tabControl.TabPages.Add(CreateBoundaryTab());
-
-            // ---- Tab 2: Lanes & Chains ----
             tabControl.TabPages.Add(CreateLanesTab());
-
-            // ---- Tab 3: PMI Dimensions ----
             tabControl.TabPages.Add(CreatePmiTab());
 
-            // ---- Bottom buttons ----
+            // Bottom buttons
             var panelBottom = new Panel { Height = 48, Dock = DockStyle.Bottom };
             btnReset = new Button
             {
@@ -127,14 +108,9 @@ namespace FlatPatternHighlight
             AcceptButton = btnOk;
 
             panelBottom.Controls.AddRange(new Control[] { btnReset, btnCancel, btnOk });
-
             Controls.Add(tabControl);
             Controls.Add(panelBottom);
         }
-
-        // =====================================================================
-        // Abas
-        // =====================================================================
 
         private TabPage CreateBoundaryTab()
         {
@@ -149,23 +125,27 @@ namespace FlatPatternHighlight
             tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 200));
             tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
-            AddRow(tbl, 0, "ParallelismThreshold", "Produto escalar mínimo para direções paralelas",
+            AddRow(tbl, 0, "ParallelismThreshold",
+                   "Produto escalar mínimo para direções paralelas",
                    out nudParallelismThreshold, 0.8m, 1.0m, 0.05m, 4);
-            AddRow(tbl, 1, "DiagonalBendThreshold", "Componente min. |dir.X|/|dir.Y| para dobra diagonal",
+            AddRow(tbl, 1, "DiagonalBendThreshold",
+                   "Componente min. |dir.X|/|dir.Y| para dobra diagonal",
                    out nudDiagonalBendThreshold, 0.05m, 0.5m, 0.05m, 4);
-            AddRow(tbl, 2, "ArtefactSkipDistanceSq", "Distância² (mm²) para ignorar dobra no perímetro",
+            AddRow(tbl, 2, "ArtefactSkipDistanceSq",
+                   "Distância² (mm²) para ignorar dobra no perímetro",
                    out nudArtefactSkipDistanceSq, 0.0m, 10.0m, 0.05m, 4);
-            AddRow(tbl, 3, "CutoutSkipRatio", "Proporção bestDist/secondBestDist para ignorar entalhe",
+            AddRow(tbl, 3, "CutoutSkipRatio",
+                   "Proporção bestDist/secondBestDist para ignorar entalhe",
                    out nudCutoutSkipRatio, 0.0m, 1.0m, 0.05m, 4);
-            AddRow(tbl, 4, "SmallEdgeRatio", "Proporção para correção de segmento curto",
+            AddRow(tbl, 4, "SmallEdgeRatio",
+                   "Proporção para correção de segmento curto",
                    out nudSmallEdgeRatio, 0.0m, 1.0m, 0.05m, 4);
-            AddRow(tbl, 5, "SmallEdgeGuardFactor", "Fator de proteção para substituição SmallEdge",
+            AddRow(tbl, 5, "SmallEdgeGuardFactor",
+                   "Fator de proteção para substituição SmallEdge",
                    out nudSmallEdgeGuardFactor, 0.0m, 1.0m, 0.05m, 4);
 
-            // Espaçador na última linha
             tbl.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             tbl.Controls.Add(new Label(), 0, 6);
-
             page.Controls.Add(tbl);
             return page;
         }
@@ -184,7 +164,7 @@ namespace FlatPatternHighlight
             tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
             AddRow(tbl, 0, "LaneLengthRatioThreshold",
-                   "Proporção min. de comprimento para dobras na mesma lane (0.7)",
+                   "Proporção min. de comprimento para dobras na mesma lane",
                    out nudLaneLengthRatioThreshold, 0.1m, 1.0m, 0.05m, 4);
             AddRow(tbl, 1, "MaxChainGap",
                    "Distância máxima (mm) para agrupar dobras de comprimentos diferentes",
@@ -192,7 +172,6 @@ namespace FlatPatternHighlight
 
             tbl.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             tbl.Controls.Add(new Label(), 0, 2);
-
             page.Controls.Add(tbl);
             return page;
         }
@@ -216,16 +195,10 @@ namespace FlatPatternHighlight
 
             tbl.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             tbl.Controls.Add(new Label(), 0, 1);
-
             page.Controls.Add(tbl);
             return page;
         }
 
-        // =====================================================================
-        // Helpers
-        // =====================================================================
-
-        /// <summary>Adiciona uma linha label + numeric no TableLayoutPanel.</summary>
         private void AddRow(TableLayoutPanel tbl, int row, string name, string tooltip,
                             out NumericUpDown nud, decimal min, decimal max,
                             decimal increment, int decimals)
@@ -237,7 +210,6 @@ namespace FlatPatternHighlight
                 Dock = DockStyle.Fill,
                 Padding = new Padding(0, 4, 6, 4),
             };
-            // Tooltip com a descrição do campo
             var tip = new ToolTip();
             tip.SetToolTip(lbl, tooltip);
             tbl.Controls.Add(lbl, 0, row);

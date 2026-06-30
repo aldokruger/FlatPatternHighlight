@@ -130,31 +130,10 @@ namespace FlatPatternHighlight
             List<Curve> outerPerim = null;
             List<Curve> bendLines = null;
 
-            // Se o primeiro argumento for "settings" ou "/S", abre direto as configs
-            // (útil para atalhos ou chamada externa com argumentos).
-            bool settingsOnly = args.Length > 0 &&
-                (args[0].Equals("settings", StringComparison.OrdinalIgnoreCase) || args[0] == "/S");
-
             try
             {
                 theSession = Session.GetSession();
                 theUI = UI.GetUI();
-
-                // Janela de escolha: dimensionar ou configurar?
-                if (!settingsOnly)
-                {
-                    var choice = LauncherDialog.Show();
-                    if (choice == LauncherDialog.LauncherChoice.Settings)
-                        settingsOnly = true;
-                    else if (choice == LauncherDialog.LauncherChoice.Cancel)
-                        return 0;
-                }
-
-                if (settingsOnly)
-                {
-                    ShowSettings();
-                    return 0;
-                }
 
                 // Exige um work part ativo (não apenas um displayed part).
                 Part workPart = theSession.Parts.Work;
@@ -232,36 +211,6 @@ namespace FlatPatternHighlight
                 // Executa mesmo se uma exceção ocorrer durante a análise.
                 try { if (outerPerim != null) UnhighlightObjects(outerPerim); } catch { }
                 try { if (bendLines != null) UnhighlightObjects(bendLines); } catch { }
-            }
-        }
-
-        // =====================================================================
-        // PONTO DE ENTRADA 2 — janela de configurações (Ctrl+U → ShowSettings)
-        // =====================================================================
-
-        /// <summary>
-        /// Abre a janela de configurações do FlatPatternHighlight.
-        /// Não executa o processo de dimensionamento — apenas edita o settings.json.
-        /// 
-        /// Uso: File → Execute → NX Open → selecionar FlatPatternHighlight.dll
-        ///   → escolher FlatPatternHighlight.ShowSettings na lista.
-        /// </summary>
-        public static void ShowSettings()
-        {
-            try
-            {
-                var settings = Settings.Load();
-                if (ConfigDialog.ShowDialog(settings))
-                {
-                    Settings.Save(settings);
-                    // Recarrega o Config estático para que o próximo Main() use os novos valores
-                    Config = Settings.Load();
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine(
-                    $"[FlatPatternHighlight] ShowSettings error: {ex.Message}");
             }
         }
 

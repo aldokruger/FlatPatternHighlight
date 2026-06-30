@@ -1,17 +1,15 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <!-- NX 2512: .NET Framework 4.8 (recomendado) ou net8.0-windows (experimental) -->
     <TargetFramework>net48</TargetFramework>
     <PlatformTarget>x64</PlatformTarget>
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>disable</Nullable>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-    <AssemblyName>FlatPatternHighlight</AssemblyName>
-    <RootNamespace>FlatPatternHighlight</RootNamespace>
-
+    <AssemblyName>FlatPatternHighlightConfig</AssemblyName>
+    <RootNamespace>FlatPatternHighlightConfig</RootNamespace>
+    <UseWindowsForms>true</UseWindowsForms>
   </PropertyGroup>
 
-  <!-- Ajuste o caminho para sua instalaÃ§Ã£o do NX 2512 -->
   <ItemGroup>
     <Reference Include="NXOpen">
       <HintPath>D:\\NX2512\NXBIN\managed\NXOpen.dll</HintPath>
@@ -27,49 +25,13 @@
     </Reference>
   </ItemGroup>
 
-  <!-- Recurso de assinatura NX (copiar de %UGII_BASE_DIR%\UGOPEN\NXSigningResource.res) -->
+  <!-- Settings.cs compartilhado com o projeto principal -->
   <ItemGroup>
-    <EmbeddedResource Include="NXSigningResource.res" />
+    <Compile Include="..\Settings.cs" Link="Settings.cs" />
   </ItemGroup>
 
-  <!-- src_sample contem exemplos de referencia, nao faz parte do build do plugin -->
+  <!-- Recurso de assinatura NX -->
   <ItemGroup>
-    <Compile Remove="src_sample\**\*.cs" />
-    <Compile Remove="FlatPatternHighlightConfig\**\*.cs" />
-    <Compile Remove="journal.cs" />
-    <Compile Remove="journal-arredondamento.cs" />
+    <EmbeddedResource Include="..\NXSigningResource.res" Link="NXSigningResource.res" />
   </ItemGroup>
 </Project>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
