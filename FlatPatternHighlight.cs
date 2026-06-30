@@ -487,8 +487,13 @@ namespace FlatPatternHighlight
             int nonLineArcCount = 0;
             foreach (var c in outerPerim)
             {
+                if (!(c is Line) && !(c is Arc))
+                {
+                    nonLineArcCount++;
+                    lw.WriteLine($"  [diag] Skipping non-Line/Arc perimeter curve Tag={c.Tag}  Type={c.GetType().Name}");
+                    continue;
+                }
                 Point3d s, e; GetEndPoints(c, out s, out e);
-                if (!(c is Line) && !(c is Arc)) nonLineArcCount++;
                 double du = GetU(e) - GetU(s), dv = GetV(e) - GetV(s);
                 double len = Math.Sqrt(du * du + dv * dv);
                 Vector3d d = len > MinSegmentLength ? new Vector3d(du / len, dv / len, 0) : new Vector3d(0, 0, 0);
