@@ -80,14 +80,25 @@ Main()
 
 ```
 FlatPatternHighlight/
-├── FlatPatternHighlight.cs      # Código fonte (1450 linhas, completamente documentado)
-├── FlatPatternHighlight.csproj  # Projeto .NET Framework 4.8 / x64
-├── FlatPatternHighlight.men     # Arquivo de menu NX (antes do Help)
-├── FlatPatternHighlight.rtb     # Arquivo de ribbon tab NX (aba "Flat Pattern")
-├── build.ps1                    # Script de build + assinatura
-├── CHANGELOG.md                 # Histórico de evolução do algoritmo
-├── .gitignore                   # Exclui bin/, obj/, *.prt, *.pdf, dados de teste
-└── README.md                    # Esta documentação
+├── FlatPatternHighlight.cs           # Código fonte principal (~1500 linhas)
+├── FlatPatternHighlight.csproj       # Projeto .NET Framework 4.8 / x64
+├── Settings.cs                       # Classe de configuração (standalone, linked no config)
+├── BendAnalysisInfo.cs               # DTO de análise de dobra
+├── FlatPatternHighlight.men          # Arquivo de menu NX (antes do Help)
+├── FlatPatternHighlight.rtb          # Arquivo de ribbon tab NX (aba "Flat Pattern")
+├── build.ps1                         # Script de build + assinatura + deploy
+├── CHANGELOG.md                      # Histórico de evolução
+├── SETTINGS_REFERENCE.md             # Guia detalhado dos parâmetros
+├── .gitignore
+├── README.md
+│
+├── FlatPatternHighlightConfig/       # Projeto separado para editor de config
+│   ├── ConfigDialog.cs               # Dialog Windows Forms (3 abas + logo)
+│   ├── ConfigMain.cs                 # Entry point: abre o dialog, salva ao fechar
+│   ├── FlatPatternHighlightConfig.csproj
+│   └── images/
+│       ├── kw-logo.svg               # Logo KW (SVG original)
+│       └── kw-logo.png               # Logo convertido (embedded resource)
 ```
 
 ### Arquivo `.rtb` — Registro na Ribbon
@@ -190,22 +201,23 @@ Parâmetros:
 |----------------|--------------------------------------|--------------------------------|
 | `-NxDir`       | Auto-detecta (D:\NX2512, C:\Program Files\Siemens\NX2512) | Caminho da instalação NX |
 | `-Configuration` | Release                           | Debug ou Release               |
-| `-DeployDir`   | `$env:UGII_USER_DIR\startup`         | Pasta de deploy (auto-load)   |
+| `-DeployDir`   | `$env:UGII_USER_DIR\startup`         | Pasta de deploy (auto-copy)    |
 
 ### O Script Faz
 
 1. **Verifica** pré-requisitos (dotnet, DLLs NX, signing resource)
 2. **Copia** `NXSigningResource.res` da instalação NX para a pasta do projeto
-3. **Patenteia** os HintPaths no `.csproj` com o caminho NX detectado
-4. **Builda** com `dotnet build`
+3. **Patenteia** os HintPaths nos `.csproj` com o caminho NX detectado
+4. **Builda** ambas as DLLs com `dotnet build` (main + config)
 5. **Assina** com `SignDotNet.exe` (falha silenciosa se não houver licença `DotNet Author License`)
-6. **Exibe** instruções de instalação
+6. **Copia** DLLs + .men + .rtb para `$DeployDir`
 
 ### Saída
 
 ```
-DLL:      D:\Projetos\FlatPatternHighlight\bin\Debug\FlatPatternHighlight.dll
-Size:     16 KB
+DLL (main):   FlatPatternHighlight.dll     44 KB
+DLL (config): FlatPatternHighlightConfig.dll  16 KB
+Deployed to: D:\NX2512\USER\startup
 ```
 
 ---
@@ -216,22 +228,35 @@ Size:     16 KB
 
 1. Abra um part com Sheet Metal e flat pattern já criado
 2. **File → Execute → NX Open** (ou `Ctrl+U`)
-3. Selecione `FlatPatternHighlight.dll`
+3. Selecione `FlatPatternHighlight.dll` — executa o dimensionamento
+   ou `FlatPatternHighlightConfig.dll` — abre o editor de configurações
 4. Os 3 steps executam em sequência, com highlights visuais e saída no Log File
 
 ### Via Menu + Ribbon (funciona sem assinatura)
 
 O `.men` usa a sintaxe `ACTIONS NXOpen::...` que chama o método C# diretamente, sem necessidade de `AddMenuAction()`. Para essa rota funcionar no NX 2512, mantenha o entry point como `public static int Main(string[] args)`.
 
-1. Copie os 3 arquivos para uma pasta `startup` do NX:
+1. Copie os arquivos para uma pasta `startup` do NX (ou use `build.ps1` com `-DeployDir`):
+   ```powershell
+   .\build.ps1 -NxDir D:\NX2512 -DeployDir "$env:UGII_USER_DIR\startup"
+   ```
+   Ou manualmente:
    ```powershell
    Copy-Item "bin\Debug\FlatPatternHighlight.dll" "$env:UGII_USER_DIR\startup\"
+   Copy-Item "bin\Debug\FlatPatternHighlightConfig.dll" "$env:UGII_USER_DIR\startup\"
    Copy-Item "FlatPatternHighlight.men" "$env:UGII_USER_DIR\startup\"
    Copy-Item "FlatPatternHighlight.rtb" "$env:UGII_USER_DIR\startup\"
    ```
 2. Reinicie o NX
 3. O menu **Flat Pattern → Highlight Exterior Curves** aparece antes do Help
 4. A aba **Flat Pattern** aparece na faixa de opções (ribbon) do Modeling, com o grupo **Highlight** e o botão **Highlight Exterior Curves**
+
+### Entry Points
+
+| DLL | Entry Point | Função |
+|-----|------------|--------|
+| `FlatPatternHighlight.dll` | `FlatPatternHighlight.FlatPatternHighlight.Main` | Executa o dimensionamento completo |
+| `FlatPatternHighlightConfig.dll` | `FlatPatternHighlightConfig.ConfigMain.Main` | Abre o editor visual de configurações |
 
 ### Para Remover Cotas PMI Geradas
 
@@ -265,12 +290,13 @@ O arquivo é **criado automaticamente** na primeira execução do plugin.
 | Parâmetro | Padrão | Controle |
 |-----------|:------:|----------|
 | `ParallelismThreshold` | `0.95` | Rigor do casamento entre curvas paralelas |
-| `CutoutSkipRatio` | `0.3` | Detecção de recortes/entalhes finos |
 | `SmallEdgeRatio` | `0.5` | Correção de cantos chanfrados (notch de canto) |
 | `LaneLengthRatioThreshold` | `0.7` | Separação de flanges em lanes independentes |
 | `DiagonalBendThreshold` | `0.2` | Sensibilidade para detectar dobras diagonais |
 | `SmallEdgeGuardFactor` | `0.5` | Proteção contra falso positivo da correção de canto |
 | `ArtefactSkipDistanceSq` | `0.25` | Filtro de bordas do perímetro retornadas como dobras |
+| `MaxChainGap` | `50.0` | Distância máxima (mm) para agrupar dobras de comprimentos diferentes |
+| `DimensionDecimalPlaces` | `1` | Casas decimais nas cotas PMI (0=inteiro, 1=1 casa...)|
 
 Para detalhes completos de cada parâmetro, incluindo:
 
@@ -369,13 +395,48 @@ Bend[0] Tag=66084  Mid=(832,1,76,8)  Dir=(1,000,0,000)  Len=1662,2
 
 1. **Particiona em low/high side** — projeta cada dobra na normal de referência e classifica como "lado baixo" (mais perto do bbox mínimo) ou "lado alto" (mais perto do bbox máximo).
 2. **Ordena** cada lado por offset (crescente no low side, decrescente no high side).
-3. **Seleção do boundary (1ª cota)** — método **unificado "nearest corrected cross-side"**:
-   - Parte dos candidatos `bestIdxA`/`bestIdxB` (curva paralela mais próxima de cada lado).
-   - **Skip de cutout**: se `best / secondBest < 0.3`, a "mais próxima" é provavelmente um recorte fino grudado na dobra → troca para a `secondBest`. Threshold 0.3 = observação empírica de cutouts a <30% da distância da borda real.
-   - **Preferência Line sobre Arc**: entre os dois lados corrigidos, escolhe o mais próximo, priorizando `Line`. Arcs causam o erro NX 1175009 no builder perpendicular.
+3. **Seleção do boundary (1ª cota)** — usa `farIdx`/`farLineIdx` (curva paralela mais distante),
+   com correção SmallEdgeRatio. Para dobras diagonais, usa distância real ao perímetro
+   + guarda de comprimento de segmento (5mm) para evitar artefatos de canto.
 4. **Cria cotas:**
    - 1ª cota: da curva de boundary selecionada → midpoint da 1ª dobra
-   - Cotas seguintes: entre midpoints consecutivos das dobras
+   - Cotas seguintes: entre midpoints consecutivos das dobras (pula dobras
+     no mesmo offset perpendicular — dist < 0.5mm)
+
+**Prevenção de sobreposição entre chains:**
+
+Cada chain tem seu próprio nível de posicionamento por lado (V-dominante →
+lado direito; U-dominante → lado superior). O `PlacementTracker` rastreia
+os níveis incrementalmente:
+
+```
+Chain 1 (V-dominante): level 0 → margin + 0 * spacing
+Chain 2 (V-dominante): level 1 → margin + 1 * spacing
+Chain 1 (U-dominante): level 0 → margin + 0 * spacing
+```
+
+O incremento do nível só ocorre APÓS a criação bem-sucedida da cota
+(`ConfirmPlacementLevel`), evitando gaps no espaçamento.
+
+**Deduplicação de cotas boundary:**
+
+Cotas boundary com o mesmo valor arredondado podem ser redundantes quando
+múltiplas lanes na mesma borda da peça têm a primeira dobra na mesma
+distância do perímetro. A chave de dedup combina:
+
+- **Valor arredondado** (conforme `DimensionDecimalPlaces`)
+- **Direção UV dominante** (U+/U-/V+/V-) da cota
+- **Lado do bbox** (low/high)
+
+Cotas em lados opostos da peça (ex.: aba esquerda vs direita) permanecem
+independentes mesmo com o mesmo valor numérico.
+
+**Limpeza automática na reexecução:**
+
+Ao iniciar, o plugin varre `workPart.Dimensions` em busca de cotas com o
+user attribute `"FlatPatternHighlight" = "true"` e deleta todas via
+`UpdateManager.AddObjectsToDeleteList`. Isso permite Ctrl+U repetido
+sem acumular cotas duplicadas.
 
 #### Cascata de fallback (cada estágio mais tolerante a falhas)
 
@@ -493,7 +554,6 @@ Estas dobras têm um lado que encosta diretamente na borda do bounding box — s
 - [ ] **Highlight visual das conexões** — desenhar linhas/setas entre bend lines e suas curvas de perímetro associadas
 - [ ] **Export CSV** — salvar a tabela de proximidade em arquivo CSV
 - [ ] **Ordem de dobra** — detectar sequência de dobra (bend sequence) a partir da geometria
-- [ ] **Limpeza automática de PMI** — script para remover todas as cotas criadas pelo plugin
 
 ---
 
@@ -511,9 +571,8 @@ A assinatura só é necessária se o plugin precisar fazer parte do fluxo de ini
 
 Histórico completo da evolução em [`CHANGELOG.md`](CHANGELOG.md). Resumo:
 
-- **[Unreleased]** — Documentação refinada (comentários no código, README atualizado, CHANGELOG criado)
-- **2026-06** — Unificação da seleção de boundary ("nearest corrected cross-side") com skip de cutout via `secondBest`; fallbacks PMI (indicator-line p/ Arc e sem licença, point-fallback)
-- **2026-06** — Tratamento iterativo de dobras diagonais (vários commits: nearest/farthest/Line/nearIdx)
-- **2026-06** — Skip de bridge dimension redundante quando há 1 dobra por lado
-- **2026-06** — Fix de compilação (`boundaryIdx` não declarado, `outerPerim` faltante em `CreateChainSide`)
+- **[Unreleased]** — Duas DLLs (main + config), ConfigDialog com logo, PlacementTracker,
+  dedup de cotas boundary, DeletePreviousPmiDimensions, SmallEdgeRatio corrigido,
+  skip de curvas não-Line/Arc, código morto removido
+- **2026-06** — Unificação da seleção de boundary, fallbacks PMI, dobras diagonais
 - **2026-06** — Versão inicial: 3 steps (perímetro, dobras, proximidade) com cotas PMI em cadeia

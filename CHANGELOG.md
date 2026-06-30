@@ -13,31 +13,50 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
   `%APPDATA%\FlatPatternHighlight\settings.json` (JSON). O arquivo é criado
   automaticamente com valores padrão na primeira execução. Cada usuário pode
   ajustar os parâmetros sem recompilar a DLL.
-  - Classe `Settings` interna com 7 parâmetros documentados
+  - Classe `Settings` interna com parâmetros documentados
   - JSON parser/serializer manual (sem dependência externa)
   - Valores logados no NX LogFile na inicialização para confirmação
-  - Guardas numéricas (`MinSegmentLength`, `OverlapEpsilon`) mantidas privadas
-  - `SETTINGS_REFERENCE.md` — guia detalhado de cada parâmetro com trechos de
-    código, tabelas de efeito e cenários típicos
-- **Internacionalização pt-BR** — todos os comentários XML e inline traduzidos
-  para português brasileiro (213 alterações em 2 arquivos)
-- **README** atualizado:
-  - Nova seção "Configuração" com tabela resumo e link para `SETTINGS_REFERENCE.md`
-  - Line count corrigido (800+ → 1450)
-  - Seção "Chain PMI Dimensioning" reescrita para refletir o algoritmo atual
-    ("nearest corrected cross-side" + skip de cutout)
-  - Tabela da cascata de fallback PMI
-  - Step 3 expandido com multi-candidate tracking, correção small-edge e dobras diagonais
-  - Seção Changelog adicionada
-- **CHANGELOG.md** — este arquivo
-- **SETTINGS_REFERENCE.md** — documentação completa dos parâmetros
-- **Documentação refinada** — comentários inline detalhados nas heurísticas críticas do código:
-  - Estrutura da tupla `bendInfos` (23 campos) documentada campo a campo
-  - Tracking de múltiplos candidatos (`bestIdx`/`secondBestIdx`/`farIdx`/`nearIdx`/`bestLineIdx`/`farLineIdx`) com explicação do *porquê* de cada um
-  - Heurística de skip de cutout (ratio 0,3) explicada
-  - Fallback de dobras diagonais (threshold 0,2) explicado
-  - Correção small-edge (`SmallEdgeRatio = 0,5`) explicada
-  - Cascata de fallback PMI (indicator-line → point-fallback) documentada nos catch blocks
+  - `SETTINGS_REFERENCE.md` — guia detalhado de cada parâmetro
+- **Duas DLLs independentes** — `FlatPatternHighlight.dll` (dimensionamento) e
+  `FlatPatternHighlightConfig.dll` (editor de configurações). Cada DLL tem um
+  único entry point, sem dialogo de seleção. Build e assinatura em paralelo.
+- **ConfigDialog (Windows Forms)** — editor visual de configurações com 3 abas
+  (Boundary Detection, Lanes & Chains, PMI Dimensions), controles NumericUpDown,
+  Restaurar Padrões e logo KW.
+- **PlacementTracker** — rastreamento de nível por lado (V-dominante/UDominante)
+  para evitar sobreposição de cotas entre chains diferentes.
+  Incremento tardio: nível só avança após criação bem-sucedida da cota.
+- **DeletePreviousPmiDimensions** — remove cotas de execuções anteriores
+  identificadas pelo user attribute `"FlatPatternHighlight"`, evitando
+  duplicação ao reexecutar o comando.
+- **Deduplicação de cotas boundary** — cotas com mesmo valor arredondado e
+  mesma direção UV + mesmo lado do bbox são colapsadas em uma única.
+  Cotas em lados opostos da peça permanecem independentes.
+- **build.ps1** — copia automaticamente as DLLs + .men + .rtb para `$DeployDir`
+- **Logo KW** no cabeçalho do ConfigDialog (SVG convertido para PNG)
+- **DimensionDecimalPlaces** — configuração de casas decimais nas cotas PMI
+  (0=inteiro, 1=1 casa, 2=2 casas...)
+
+### Corrigido
+- **SmallEdgeRatio para farLineIdxA/B** — a correção SmallEdgeRatio usava
+  `longestIdx` (que podia apontar para Arc), violando o contrato Line-only
+  de `farLineIdx`. Agora rastreia `longestLineIdx` separado (somente Lines)
+  e usa este na correção.
+- **Curvas não-Line/Arc na construção de perimData** — curvas não suportadas
+  (ex.: Spline) que retornavam `GetEndPoints(0,0,0)` agora são puladas com
+  `continue`, evitando distorção do bounding box.
+- **Código morto removido** — `CutoutSkipRatio` e `SecondBestIdx/Dist`
+  (nunca consumidos pela lógica) removidos de Settings.cs, BendAnalysisInfo.cs,
+  FlatPatternHighlight.cs e ConfigDialog.cs.
+- **Docstring duplicada** em `ClusterByRangeOverlap` — removido o primeiro
+  bloco `<summary>` (versão antiga sem `withinOffsetGap`).
+- **ConfigDialog layout** — RowStyles corrigidos (ordem posicional),
+  save flow correto (SaveSettings on OK), form Padding para logo sem
+  sobrepor os tabs.
+
+### Alterado
+- **Documentação refinada** — comentários inline detalhados nas heurísticas
+  críticas do código, README atualizado, CHANGELOG, SETTINGS_REFERENCE.md
 
 ---
 
