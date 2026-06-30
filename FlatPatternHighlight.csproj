@@ -35,8 +35,11 @@
   <ItemGroup>
     <Compile Remove="src_sample\**\*.cs" />
     <Compile Remove="journal.cs" />
+    <Compile Remove="journal-arredondamento.cs" />
   </ItemGroup>
 </Project>
+
+
 
 
 
