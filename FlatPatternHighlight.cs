@@ -98,7 +98,7 @@ namespace FlatPatternHighlight
         // VALORES RESOLVIDOS — carregados do Settings do usuário no startup
         // =====================================================================
 
-        private static readonly Settings Config = Settings.Load();
+        private static Settings Config = Settings.Load();
 
         private static double ParallelismThreshold => Config.ParallelismThreshold;
         private static double DiagonalBendThreshold => Config.DiagonalBendThreshold;
@@ -254,6 +254,8 @@ namespace FlatPatternHighlight
                 if (ConfigDialog.ShowDialog(settings))
                 {
                     Settings.Save(settings);
+                    // Recarrega o Config estático para que o próximo Main() use os novos valores
+                    Config = Settings.Load();
                 }
             }
             catch (Exception ex)

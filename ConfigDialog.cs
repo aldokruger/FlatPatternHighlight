@@ -119,7 +119,11 @@ namespace FlatPatternHighlight
                 Anchor = AnchorStyles.Right | AnchorStyles.Top,
                 UseVisualStyleBackColor = true
             };
-            btnOk.Click += (s, e) => DialogResult = DialogResult.OK;
+            btnOk.Click += (s, e) =>
+            {
+                SaveSettings();
+                DialogResult = DialogResult.OK;
+            };
             AcceptButton = btnOk;
 
             panelBottom.Controls.AddRange(new Control[] { btnReset, btnCancel, btnOk });
@@ -140,8 +144,7 @@ namespace FlatPatternHighlight
                 Dock = DockStyle.Fill,
                 Padding = new Padding(12),
                 ColumnCount = 2,
-                RowCount = 7,
-                AutoSize = true
+                RowCount = 7
             };
             tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 200));
             tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -175,8 +178,7 @@ namespace FlatPatternHighlight
                 Dock = DockStyle.Fill,
                 Padding = new Padding(12),
                 ColumnCount = 2,
-                RowCount = 3,
-                AutoSize = true
+                RowCount = 3
             };
             tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 200));
             tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -203,8 +205,7 @@ namespace FlatPatternHighlight
                 Dock = DockStyle.Fill,
                 Padding = new Padding(12),
                 ColumnCount = 2,
-                RowCount = 2,
-                AutoSize = true
+                RowCount = 2
             };
             tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 200));
             tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
