@@ -1325,7 +1325,7 @@ namespace FlatPatternHighlight
                         dirTag = bdU >= 0 ? "U+" : "U-";
                     else
                         dirTag = bdV >= 0 ? "V+" : "V-";
-                    string dedupKey = $"{boundaryDist.ToString("F" + DimensionDecimalPlaces, System.Globalization.CultureInfo.InvariantCulture)}|{dirTag}";
+                    string dedupKey = $"{boundaryDist.ToString("F" + DimensionDecimalPlaces, System.Globalization.CultureInfo.InvariantCulture)}|{dirTag}|{(isLowSide ? "L" : "H")}";
                     if (placement != null && placement.IsKeyDuplicate(dedupKey))
                     {
                         lw.WriteLine($"  [Chain] Skipping boundary dim for Bend Tag={first.Bend.Tag} -" +
