@@ -809,36 +809,49 @@ namespace FlatPatternHighlight
 
             /// <summary>
             /// Conjunto de valores de cota boundary ja criados (arredondados conforme
-            /// DimensionDecimalPlaces). Evita criar duas cotas com o mesmo valor numerico
-            /// para lanes diferentes cuja primeira dobra esta na mesma distancia do perimetro.
-            /// Chave: distancia formatada (ex.: "23.4" para 1 casa decimal).
+            /// DimensionDecimalPlaces, com direcao). A chave inclui a direcao dominante
+            /// da cota (ex.: "23.4|U+") para que cotas no mesmo valor em lados opostos
+            /// da peca (ex.: esquerda vs direita) permanecam independentes.
             /// </summary>
             public HashSet<string> CreatedBoundaryValues = new HashSet<string>();
 
             /// <summary>
-            /// Retorna true se uma cota com este valor (arredondado) ja foi criada.
-            /// Nao registra — use RegisterBoundaryValue apos criacao bem-sucedida.
+            /// Retorna true se uma cota com este valor (arredondado) e direcao ja foi
+            /// criada. Nao registra — use RegisterBoundaryValue apos criacao bem-sucedida.
             /// </summary>
-            public bool IsBoundaryValueDuplicate(double distance)
+            public bool IsBoundaryValueDuplicate(double distance, Point3d from, Point3d to)
             {
-                string key = FormatBoundaryKey(distance);
+                string key = FormatBoundaryKey(distance, from, to);
                 return CreatedBoundaryValues.Contains(key);
             }
 
             /// <summary>
             /// Registra um valor de cota boundary como ja criado.
             /// </summary>
-            public void RegisterBoundaryValue(double distance)
+            public void RegisterBoundaryValue(double distance, Point3d from, Point3d to)
             {
-                string key = FormatBoundaryKey(distance);
+                string key = FormatBoundaryKey(distance, from, to);
                 CreatedBoundaryValues.Add(key);
             }
 
-            private static string FormatBoundaryKey(double distance)
+            /// <summary>
+            /// Formata a chave = "{distancia}|{direcao}". A direcao e' a componente
+            /// dominante do vetor (to - from): "U+", "U-", "V+" ou "V-". Isto separa
+            /// cotas no mesmo valor mas em lados opostos (ex.: aba esquerda vs direita).
+            /// <summary>
+            private static string FormatBoundaryKey(double distance, Point3d from, Point3d to)
             {
-                return distance.ToString(
+                string value = distance.ToString(
                     "F" + DimensionDecimalPlaces,
                     System.Globalization.CultureInfo.InvariantCulture);
+                double dU = to.X - from.X;
+                double dV = to.Y - from.Y;
+                string dir;
+                if (Math.Abs(dU) >= Math.Abs(dV))
+                    dir = dU >= 0 ? "U+" : "U-";
+                else
+                    dir = dV >= 0 ? "V+" : "V-";
+                return value + "|" + dir;
             }
         }
 
@@ -1319,7 +1332,7 @@ namespace FlatPatternHighlight
                         (boundaryPoint.X - first.MidPoint.X) * (boundaryPoint.X - first.MidPoint.X) +
                         (boundaryPoint.Y - first.MidPoint.Y) * (boundaryPoint.Y - first.MidPoint.Y) +
                         (boundaryPoint.Z - first.MidPoint.Z) * (boundaryPoint.Z - first.MidPoint.Z));
-                    if (placement != null && placement.IsBoundaryValueDuplicate(boundaryDist))
+                    if (placement != null && placement.IsBoundaryValueDuplicate(boundaryDist, first.MidPoint, boundaryPoint))
                     {
                         lw.WriteLine($"  [Chain] Skipping boundary dim for Bend Tag={first.Bend.Tag} -" +
                             $" duplicate value {boundaryDist.ToString("F" + DimensionDecimalPlaces)} already created");
@@ -1334,7 +1347,7 @@ namespace FlatPatternHighlight
                             normalAxis, placement);
                         if (CreatePmiRapidDimension(workPart, seg.curve, boundaryPoint, first.Bend, first.MidPoint, origin, normalAxis, lw))
                         {
-                            placement?.RegisterBoundaryValue(boundaryDist);
+                            placement?.RegisterBoundaryValue(boundaryDist, first.MidPoint, boundaryPoint);
                             count++;
                         }
                     }
